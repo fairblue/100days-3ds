@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ビートキャッチ | 100日チャレンジ Day 2</title>
+<style>
+  :root {
+    --bg: #14102e;
+    --surface: #1e1845;
+    --pink: #ff5da2;
+    --cyan: #3ee6c4;
+    --gold: #ffd166;
+    --text: #f4f1ff;
+    --font: "Hiragino Maru Gothic ProN", "Hiragino Maru Gothic Pro", "BIZ UDPGothic", "Arial Rounded MT Bold", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    overflow: hidden;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: 100vh;
+    height: 100dvh;
+    padding: 8px 0;
+  }
+  /* 画面の高さに必ず収まる幅（3:4） */
+  .stage {
+    position: relative;
+    width: min(96vw, 480px, calc((100vh - 110px) * 0.75));
+    width: min(96vw, 480px, calc((100dvh - 110px) * 0.75));
+    aspect-ratio: 3 / 4;
+    container-type: size;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 18px;
+    background: var(--surface);
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+  }
+  canvas:focus { outline: none; }
+  canvas:focus-visible, button:focus-visible {
+    outline: 3px solid var(--gold);
+    outline-offset: 3px;
+  }
+  .overlay-btn {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font: inherit;
+    font-size: clamp(15px, 4.2vw, 20px);
+    font-size: 4cqw; /* ステージ幅基準（480px幅で約19px） */
+    line-height: 1.2;
+    white-space: nowrap;
+    font-weight: 700;
+    color: var(--bg);
+    background: var(--cyan);
+    border: none;
+    border-radius: 999px;
+    padding: 0.7em 1.8em;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .overlay-btn[hidden] { display: none; }
+  #startBtn { top: 62%; }
+  #retryBtn { top: 80%; background: var(--pink); color: var(--text); }
+  .hint {
+    margin: 0;
+    font-size: 13px;
+    opacity: 0.75;
+    text-align: center;
+    padding: 0 12px;
+  }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <canvas id="game" width="480" height="640" tabindex="0" aria-label="ビートキャッチのゲーム画面。タップかスペースキーで音符をキャッチします"></canvas>
+    <button class="overlay-btn" id="startBtn" type="button">タップでスタート</button>
+    <button class="overlay-btn" id="retryBtn" type="button" hidden>もう一度</button>
+  </div>
+  <p class="hint">音符がリングに重なった瞬間に、画面タップ・クリック・スペースキー</p>
+
+<script>
+(() => {
+  'use strict';
+
+  // ===== 定数 =====
+  const W = 480, H = 640;
+  const COLORS = { bg: '#14102e', surface: '#1e1845', pink: '#ff5da2', cyan: '#3ee6c4', gold: '#ffd166', text: '#f4f1ff' };
+  const FONT = '"Hiragino Maru Gothic ProN", "Hiragino Maru Gothic Pro", "BIZ UDPGothic", "Arial Rounded MT Bold", system-ui, sans-serif';
+  const BPM = 120;
+  const BEAT = 60 / BPM;          // 1拍 = 0.5秒
+  const COUNT_BEATS = 4;          // カウントイン
+  const MAIN_BEATS = 32;          // 本編
+  const LEAD = COUNT_BEATS * BEAT; // 本編開始までの時間
+  const FALL = 2.0;               // 出現からリング到達まで
+  const PERFECT = 0.060, GOOD = 0.120;
+  const EARLY_MISS = 0.220;       // この範囲の早押しは Miss 扱い
+  const PREROLL = 0.35;           // 開始前の小休止
+  const RING = { x: 240, y: 528, r: 74 };
+  const SPAWN_Y = -30;
+
+  // Cメジャーペンタトニック
+  const SCALE = [261.63, 293.66, 329.63, 392.0, 440.0, 523.25];
+  const PITCH_COLOR = [COLORS.cyan, COLORS.cyan, COLORS.pink, COLORS.pink, COLORS.gold, COLORS.gold];
+
+  // ノーツ配置（小節内の拍位置）。合計40個
+  const BARS = [
+    [0, 1, 2, 3],
+    [0, 1, 2, 2.5, 3],
+    [0, 1, 1.5, 2, 3],
+    [0, 1, 2, 3, 3.5],
+    [0, 1, 2, 2.5, 3],
+    [0, 0.5, 1, 2, 2.5, 3],
+    [0, 1, 1.5, 2, 3, 3.5],
+    [0, 1, 2, 3],
+  ];
+  // メロディ（SCALE の添字）。上の配置と同じ数だけ並べる
+  const MELODY = [
+    0, 2, 3, 2,
+    0, 2, 3, 4, 3,
+    5, 4, 3, 2, 3,
+    2, 3, 4, 5, 4,
+    3, 2, 0, 1, 2,
+    3, 4, 5, 4, 3, 2,
+    1, 2, 3, 4, 5, 4,
+    3, 1, 2, 0,
+  ];
+
+  function buildNotes() {
+    const notes = [];
+    let i = 0;
+    BARS.forEach((bar, b) => {
+      bar.forEach(pos => {
+        const beat = b * 4 + pos;
+        const pitch = MELODY[i % MELODY.length];
+        notes.push({
+          beat, pitch,
+          hitT: LEAD + beat * BEAT,
+          // 音高で少し横にずれた所から降り、リングに吸い込まれる
+          sway: (pitch - 2.5) * 34,
+          judged: null, judgedAt: 0, arrived: false,
+        });
+        i++;
+      });
+    });
+    return notes;
+  }
+
+  // ===== DOM =====
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const startBtn = document.getElementById('startBtn');
+  const retryBtn = document.getElementById('retryBtn');
+  const params = new URLSearchParams(location.search);
+  const DEMO = params.has('demo');
+  const reduceMQ = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  const reducedMotion = () => !!(reduceMQ && reduceMQ.matches);
+
+  // 高解像度ディスプレイ対応（内部座標は常に 480×640）
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', resize);
+  resize();
+
+  // ===== 音（WebAudio 合成のみ） =====
+  let audio = null;
+  let noiseBuf = null;
+
+  function initAudio() {
+    if (!audio) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      try {
+        audio = new AC();
+        const len = Math.floor(audio.sampleRate * 0.2);
+        noiseBuf = audio.createBuffer(1, len, audio.sampleRate);
+        const d = noiseBuf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      } catch (e) {
+        audio = null;
+        return;
+      }
+    }
+    if (audio.state === 'suspended' && audio.resume) {
+      audio.resume().catch(() => {});
+    }
+  }
+
+  // ゲーム時刻 → AudioContext の時刻
+  function toAudioTime(gameT) {
+    return audio.currentTime + Math.max(0, gameT - gameTime());
+  }
+
+  function envGain(t, peak, attack, decay) {
+    const g = audio.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+    g.connect(audio.destination);
+    return g;
+  }
+
+  function playClick(t, accent) {
+    const o = audio.createOscillator();
+    o.type = 'square';
+    o.frequency.setValueAtTime(accent ? 1760 : 1320, t);
+    o.connect(envGain(t, 0.12, 0.002, 0.05));
+    o.start(t); o.stop(t + 0.08);
+  }
+
+  function playKick(t) {
+    const o = audio.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + 0.2);
+    o.connect(envGain(t, 0.5, 0.004, 0.26));
+    o.start(t); o.stop(t + 0.3);
+  }
+
+  function playPluck(t, freq) {
+    const o = audio.createOscillator();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(freq, t);
+    const f = audio.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(3200, t);
+    f.frequency.exponentialRampToValueAtTime(600, t + 0.3);
+    o.connect(f);
+    f.connect(envGain(t, 0.22, 0.004, 0.34));
+    o.start(t); o.stop(t + 0.4);
+  }
+
+  function playPon() {
+    if (!audio) return;
+    const t = audio.currentTime;
+    const o = audio.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(880, t);
+    o.frequency.exponentialRampToValueAtTime(1500, t + 0.06);
+    o.connect(envGain(t, 0.22, 0.002, 0.11));
+    o.start(t); o.stop(t + 0.14);
+    const n = audio.createBufferSource();
+    n.buffer = noiseBuf;
+    const hp = audio.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 4000;
+    n.connect(hp);
+    hp.connect(envGain(t, 0.08, 0.001, 0.05));
+    n.start(t); n.stop(t + 0.07);
+  }
+
+  function playBuzz() {
+    if (!audio) return;
+    const t = audio.currentTime;
+    const o = audio.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(95, t);
+    o.frequency.linearRampToValueAtTime(70, t + 0.16);
+    const f = audio.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 500;
+    o.connect(f);
+    f.connect(envGain(t, 0.2, 0.004, 0.16));
+    o.start(t); o.stop(t + 0.2);
+  }
+
+  // 先読みスケジューラ（BGM: カウント・キック・メロディ）
+  let soundEvents = [];
+  let soundIdx = 0;
+
+  function buildSoundEvents(notes) {
+    const ev = [];
+    for (let i = 0; i < COUNT_BEATS; i++) ev.push({ t: i * BEAT, kind: 'click', accent: i === COUNT_BEATS - 1 });
+    for (let b = 0; b < MAIN_BEATS; b++) ev.push({ t: LEAD + b * BEAT, kind: 'kick' });
+    notes.forEach(n => ev.push({ t: n.hitT, kind: 'pluck', freq: SCALE[n.pitch] }));
+    ev.sort((a, b) => a.t - b.t);
+    return ev;
+  }
+
+  function scheduleSounds(t) {
+    while (soundIdx < soundEvents.length && soundEvents[soundIdx].t < t + 0.12) {
+      const e = soundEvents[soundIdx++];
+      if (!audio || e.t < t - 0.05) continue; // 遅れすぎた音は鳴らさない
+      const at = toAudioTime(e.t);
+      if (e.kind === 'click') playClick(at, e.accent);
+      else if (e.kind === 'kick') playKick(at);
+      else playPluck(at, e.freq);
+    }
+  }
+
+  // ===== ゲーム状態 =====
+  let state = 'title';          // title / play / result
+  let songStart = 0;            // performance.now() 基準（秒）
+  let notes = [];
+  let stats = null;
+  let judgeFx = null;           // 判定表示
+  let particles = [];
+  let ringPulse = 0;            // リング到達時の光
+  let ringSink = 0;             // 失敗時の沈み
+  let demoTaps = [];
+
+  const nowSec = () => performance.now() / 1000;
+  const gameTime = () => nowSec() - songStart;
+
+  function newStats() {
+    return { score: 0, combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0 };
+  }
+
+  function startGame() {
+    initAudio();
+    notes = buildNotes();
+    stats = newStats();
+    soundEvents = buildSoundEvents(notes);
+    soundIdx = 0;
+    particles = [];
+    judgeFx = null;
+    ringPulse = 0;
+    ringSink = 0;
+    songStart = nowSec() + PREROLL;
+    demoTaps = DEMO ? buildDemoTaps(notes) : [];
+    state = 'play';
+    startBtn.hidden = true;
+    retryBtn.hidden = true;
+    canvas.focus({ preventScroll: true });
+  }
+
+  // デモ: 到達時刻に自動タップ。±25ms の誤差＋6ノーツに1つは 70〜100ms ずらして GOOD も出す
+  function buildDemoTaps(list) {
+    return list.map((n, i) => {
+      let err = (Math.random() * 2 - 1) * 0.025;
+      if (i % 6 === 5) err = (Math.random() < 0.5 ? -1 : 1) * (0.070 + Math.random() * 0.030);
+      return n.hitT + err;
+    }).sort((a, b) => a - b);
+  }
+
+  function finishGame() {
+    state = 'result';
+    retryBtn.hidden = false;
+    if (!DEMO) retryBtn.focus({ preventScroll: true });
+  }
+
+  function rankOf(s) {
+    const total = notes.length * 300;
+    const rate = total ? s.score / total : 0;
+    if (rate >= 0.95) return 'S';
+    if (rate >= 0.80) return 'A';
+    if (rate >= 0.60) return 'B';
+    return 'C';
+  }
+
+  // ===== 判定 =====
+  function judge(note, kind, t) {
+    note.judged = kind;
+    note.judgedAt = t;
+    if (kind === 'miss') {
+      stats.miss++;
+      stats.combo = 0;
+      ringSink = 1;
+      playBuzz();
+      showJudge('MISS', '#9a93c9', t);
+      return;
+    }
+    if (kind === 'perfect') { stats.perfect++; stats.score += 300; showJudge('PERFECT', COLORS.gold, t); }
+    else { stats.good++; stats.score += 100; showJudge('GOOD', COLORS.cyan, t); }
+    stats.combo++;
+    stats.maxCombo = Math.max(stats.maxCombo, stats.combo);
+    playPon();
+    burst(PITCH_COLOR[note.pitch], kind === 'perfect' ? 18 : 10);
+  }
+
+  function showJudge(text, color, t) {
+    judgeFx = { text, color, t0: t };
+  }
+
+  // at: 判定に使う時刻（デモでは予定時刻を渡し、フレーム落ちの影響を受けないようにする）
+  function tap(at) {
+    if (state !== 'play') return;
+    const t = typeof at === 'number' ? at : gameTime();
+    // まだ判定していないノーツの中で一番近いもの
+    let best = null, bestD = Infinity;
+    for (const n of notes) {
+      if (n.judged) continue;
+      const d = Math.abs(t - n.hitT);
+      if (d < bestD) { bestD = d; best = n; }
+      if (n.hitT - t > EARLY_MISS) break;
+    }
+    if (best && bestD <= PERFECT) judge(best, 'perfect', t);
+    else if (best && bestD <= GOOD) judge(best, 'good', t);
+    else if (best && t < best.hitT && best.hitT - t <= EARLY_MISS) judge(best, 'miss', t); // 早押し
+    else ringSink = Math.max(ringSink, 0.5); // 近くにノーツがない空振り
+  }
+
+  // ===== 入力 =====
+  canvas.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if (state === 'title') startGame();
+    else tap();
+  });
+  startBtn.addEventListener('click', e => { e.stopPropagation(); startGame(); });
+  retryBtn.addEventListener('click', e => { e.stopPropagation(); startGame(); });
+  window.addEventListener('keydown', e => {
+    const isSpace = e.code === 'Space' || e.key === ' ';
+    const isEnter = e.key === 'Enter';
+    if (!isSpace && !isEnter) return;
+    if (e.target === startBtn || e.target === retryBtn) return; // ボタン自身の操作に任せる
+    if (isEnter && state !== 'result') return; // Enterはリザルト画面でのみ使う
+    e.preventDefault();
+    if (e.repeat) return; // 長押しのリピートは無視
+    if (state === 'title') startGame();
+    else if (state === 'play') tap();
+    else if (state === 'result') startGame();
+  });
+
+  // ===== 演出 =====
+  function burst(color, count) {
+    if (reducedMotion()) count = 0;
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 120 + Math.random() * 200;
+      particles.push({ x: RING.x, y: RING.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.5, max: 0.5, color, r: 2 + Math.random() * 3 });
+    }
+  }
+
+  // ===== メインループ =====
+  let lastFrame = nowSec();
+
+  function update(dt) {
+    ringPulse = Math.max(0, ringPulse - dt * 3.5);
+    ringSink = Math.max(0, ringSink - dt * 6);
+    particles = particles.filter(p => (p.life -= dt) > 0);
+    particles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.92; p.vy *= 0.92; });
+
+    if (state !== 'play') return;
+    const t = gameTime();
+    scheduleSounds(t);
+
+    // デモの自動タップ
+    while (demoTaps.length && demoTaps[0] <= t) tap(demoTaps.shift());
+
+    for (const n of notes) {
+      // リング到達の瞬間に光る
+      if (!n.arrived && t >= n.hitT) { n.arrived = true; ringPulse = 1; }
+      // 遅すぎたら Miss
+      if (!n.judged && t > n.hitT + GOOD) judge(n, 'miss', t);
+    }
+
+    if (t > LEAD + MAIN_BEATS * BEAT + 0.8) finishGame();
+  }
+
+  function loop() {
+    const now = nowSec();
+    const dt = Math.min(0.05, now - lastFrame);
+    lastFrame = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // ===== 描画 =====
+  function text(str, x, y, size, color, weight = 700, align = 'center') {
+    ctx.font = `${weight} ${size}px ${FONT}`;
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(str, x, y);
+  }
+
+  function drawBackground() {
+    ctx.fillStyle = COLORS.surface;
+    ctx.fillRect(0, 0, W, H);
+    // 中央の降下レーンをごく薄く
+    const g = ctx.createLinearGradient(0, 0, 0, RING.y);
+    g.addColorStop(0, 'rgba(62,230,196,0)');
+    g.addColorStop(1, 'rgba(62,230,196,0.08)');
+    ctx.fillStyle = g;
+    ctx.fillRect(RING.x - 60, 70, 120, RING.y - 70);
+  }
+
+  // 判定リング（レコード盤の同心円）
+  function drawRing(t) {
+    const sink = ringSink * 6;
+    const scale = 1 + ringPulse * 0.12 - ringSink * 0.06;
+    const r = RING.r * scale;
+    ctx.save();
+    ctx.translate(RING.x, RING.y + sink);
+
+    // 光の広がり
+    if (ringPulse > 0) {
+      ctx.beginPath();
+      ctx.arc(0, 0, r + 18 * ringPulse + 6, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255,209,102,${0.5 * ringPulse})`;
+      ctx.lineWidth = 6;
+      ctx.stroke();
+    }
+
+    // 盤面
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fillStyle = ringSink > 0 ? '#0f0c24' : COLORS.bg;
+    ctx.fill();
+
+    // 溝
+    const rot = reducedMotion() ? 0 : t * 1.2;
+    ctx.lineWidth = 1;
+    for (let i = 1; i <= 6; i++) {
+      ctx.beginPath();
+      ctx.arc(0, 0, r * (0.32 + i * 0.1), rot + i, rot + i + Math.PI * 1.6);
+      ctx.strokeStyle = `rgba(244,241,255,${0.08 + ringPulse * 0.15})`;
+      ctx.stroke();
+    }
+    // 外周
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = ringPulse > 0.05 ? COLORS.gold : 'rgba(244,241,255,0.55)';
+    ctx.stroke();
+    // ラベル
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.26, 0, Math.PI * 2);
+    ctx.fillStyle = COLORS.pink;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, 0, 4, 0, Math.PI * 2);
+    ctx.fillStyle = COLORS.bg;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function noteY(n, t) {
+    const p = 1 - (n.hitT - t) / FALL; // 0:出現 1:到達
+    return { p, y: SPAWN_Y + (RING.y - SPAWN_Y) * p };
+  }
+
+  function drawNoteShape(x, y, color, alpha, radius) {
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    // ♪
+    ctx.fillStyle = COLORS.bg;
+    ctx.beginPath();
+    ctx.ellipse(x - 5, y + 6, 6, 4.5, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(x, y - 11, 2.6, 17);
+    ctx.beginPath();
+    ctx.moveTo(x + 2.6, y - 11);
+    ctx.quadraticCurveTo(x + 11, y - 7, x + 8, y + 1);
+    ctx.lineTo(x + 6.5, y);
+    ctx.quadraticCurveTo(x + 8, y - 5, x + 2.6, y - 6.5);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawNotes(t) {
+    const trails = !reducedMotion();
+    for (const n of notes) {
+      if (n.judged && n.judged !== 'miss') continue; // 成功したノーツは弾けて消える
+      const { p, y } = noteY(n, t);
+      if (p < 0) continue;
+      let alpha = 1;
+      if (n.judged === 'miss') {
+        alpha = Math.max(0, 1 - (t - n.judgedAt) * 3);
+        if (alpha <= 0) continue;
+      }
+      const x = RING.x + n.sway * Math.max(0, 1 - p);
+      const color = PITCH_COLOR[n.pitch];
+      // 雨粒の残像
+      if (trails && !n.judged) {
+        for (let k = 3; k >= 1; k--) {
+          const pt = p - k * 0.035;
+          if (pt < 0) continue;
+          const ty = SPAWN_Y + (RING.y - SPAWN_Y) * pt;
+          const tx = RING.x + n.sway * Math.max(0, 1 - pt);
+          ctx.globalAlpha = 0.12 * (4 - k) / 3;
+          ctx.beginPath();
+          ctx.arc(tx, ty, 18 - k * 3, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+      drawNoteShape(x, y, n.judged === 'miss' ? '#6b6596' : color, alpha, 20);
+    }
+  }
+
+  function drawParticles() {
+    for (const p of particles) {
+      ctx.globalAlpha = p.life / p.max;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawHUD() {
+    text(String(stats.score).padStart(6, '0'), 28, 36, 26, COLORS.text, 700, 'left');
+    text('SCORE', 28, 60, 11, 'rgba(244,241,255,0.6)', 700, 'left');
+    if (stats.combo >= 2) {
+      text(`${stats.combo}`, W - 28, 36, 26, COLORS.gold, 700, 'right');
+      text('COMBO', W - 28, 60, 11, 'rgba(255,209,102,0.7)', 700, 'right');
+    }
+  }
+
+  function drawJudge(t) {
+    if (!judgeFx) return;
+    const age = t - judgeFx.t0;
+    if (age > 0.6) return;
+    const a = 1 - age / 0.6;
+    const pop = reducedMotion() ? 1 : 1 + Math.max(0, 0.25 - age) * 1.2;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.translate(RING.x, RING.y - RING.r - 40);
+    ctx.scale(pop, pop);
+    text(judgeFx.text, 0, 0, 40, judgeFx.color);
+    ctx.restore();
+  }
+
+  function drawCountIn(t) {
+    if (t < 0 || t >= LEAD) return;
+    const i = Math.floor(t / BEAT);
+    const label = ['3', '2', '1', 'ゴー'][i];
+    const age = t - i * BEAT;
+    ctx.globalAlpha = Math.max(0, 1 - age / BEAT);
+    text(label, W / 2, 250, i === 3 ? 64 : 84, i === 3 ? COLORS.pink : COLORS.text);
+    ctx.globalAlpha = 1;
+  }
+
+  function drawTitle(t) {
+    drawBackground();
+    text('ビートキャッチ', W / 2, 140, 46, COLORS.text);
+    text('〜 おとのタイミング 〜', W / 2, 192, 20, COLORS.cyan);
+    text('空から降る音符の雨は、', W / 2, 262, 16, 'rgba(244,241,255,0.85)', 400);
+    text('どれもリズムにぴったり。', W / 2, 288, 16, 'rgba(244,241,255,0.85)', 400);
+    text('リングに重なった瞬間にタップ！', W / 2, 324, 16, COLORS.gold, 700);
+    // 飾りとして3色の音符を1つずつ
+    const bob = reducedMotion() ? 0 : Math.sin(t * Math.PI * 4) * 4;
+    drawNoteShape(W / 2 - 60, 80 + bob, COLORS.cyan, 1, 16);
+    drawNoteShape(W / 2, 74 - bob, COLORS.pink, 1, 16);
+    drawNoteShape(W / 2 + 60, 80 + bob, COLORS.gold, 1, 16);
+    drawRing(t);
+  }
+
+  function drawResult(t) {
+    drawBackground();
+    const rank = rankOf(stats);
+    const rankColor = { S: COLORS.gold, A: COLORS.pink, B: COLORS.cyan, C: COLORS.text }[rank];
+    text('リザルト', W / 2, 70, 28, COLORS.text);
+    text(rank, W / 2, 170, 120, rankColor);
+    text('ランク', W / 2, 240, 13, 'rgba(244,241,255,0.6)');
+    text(`${stats.score} 点`, W / 2, 300, 36, COLORS.text);
+    const rows = [
+      ['PERFECT', stats.perfect, COLORS.gold],
+      ['GOOD', stats.good, COLORS.cyan],
+      ['MISS', stats.miss, '#9a93c9'],
+      ['最大コンボ', stats.maxCombo, COLORS.pink],
+    ];
+    rows.forEach(([k, v, c], i) => {
+      const y = 360 + i * 34;
+      text(k, 150, y, 18, c, 700, 'left');
+      text(String(v), 330, y, 20, COLORS.text, 700, 'right');
+    });
+    particles.length && drawParticles();
+  }
+
+  function draw() {
+    const t = state === 'play' ? gameTime() : nowSec();
+    if (state === 'title') { drawTitle(t); return; }
+    if (state === 'result') { drawResult(t); return; }
+    drawBackground();
+    drawRing(t);
+    drawNotes(t);
+    drawParticles();
+    drawJudge(t);
+    drawHUD();
+    drawCountIn(t);
+  }
+
+  // テスト・録画用に状態を公開
+  window.__beatCatch = {
+    get state() { return state; },
+    get stats() { return stats && Object.assign({ notes: notes.length, rank: rankOf(stats) }, stats); },
+  };
+
+  requestAnimationFrame(loop);
+  if (DEMO) {
+    startBtn.hidden = true;
+    startGame();
+  }
+})();
+</script>
+</body>
+</html>

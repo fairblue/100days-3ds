@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ひびきのオカリナ 〜おとのきおく〜</title>
+<meta name="description" content="光る石が奏でる旋律をおぼえて、同じ順にタップする音のきおくゲーム。">
+<meta name="theme-color" content="#141B33">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23141B33'/%3E%3Ccircle cx='32' cy='34' r='16' fill='%237BE0A3'/%3E%3Ccircle cx='32' cy='34' r='22' fill='none' stroke='%23FFD166' stroke-width='3' opacity='.6'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --night:#141B33;
+    --ink:#F2EFE6;
+    --gold:#FFD166;
+    --stone:#262D4D;
+    --dim:#A3ABCB;
+    --w:min(96vw, 480px, calc((100dvh - 110px) * 0.75));
+    --serif:"Hiragino Mincho ProN","Hiragino Mincho Pro","Yu Mincho","YuMincho","Noto Serif JP",serif;
+    --sans:system-ui,-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    min-height:100dvh;
+    background:#0E1326;
+    color:var(--ink);
+    font-family:var(--sans);
+    display:flex;flex-direction:column;align-items:center;
+    justify-content:safe center;
+    gap:6px;padding:6px 0;
+    -webkit-tap-highlight-color:transparent;
+  }
+  button{font:inherit;color:inherit}
+  :focus-visible{outline:3px solid var(--gold);outline-offset:3px;border-radius:8px}
+
+  /* header */
+  .head{
+    width:var(--w);
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    min-height:48px;
+  }
+  .head h1{
+    margin:0;font-family:var(--serif);font-weight:600;
+    font-size:clamp(15px, calc(var(--w) * .046), 22px);letter-spacing:.06em;white-space:nowrap;
+    line-height:1.15;
+  }
+  .head h1 small{display:block;font-size:12px;color:var(--dim);letter-spacing:.12em;font-weight:400}
+  .ghost{
+    min-height:44px;min-width:44px;padding:0 14px;
+    background:transparent;border:1px solid #4A5378;border-radius:999px;
+    white-space:nowrap;cursor:pointer;font-size:13px;color:var(--ink);
+  }
+  .ghost:hover{border-color:var(--dim)}
+
+  /* stage */
+  .stage{
+    position:relative;
+    width:var(--w);height:calc(var(--w) * 4 / 3);
+    aspect-ratio:3/4;
+    container-type:size;
+    overflow:hidden;
+    border-radius:18px;
+    background:
+      radial-gradient(120% 70% at 50% 0%, #1C2546 0%, var(--night) 60%),
+      var(--night);
+    box-shadow:0 0 0 1px #262F55 inset;
+    touch-action:manipulation;
+    user-select:none;-webkit-user-select:none;
+  }
+  .stage::before{
+    content:"";position:absolute;inset:0;pointer-events:none;opacity:.75;
+    background-image:
+      radial-gradient(circle at 8% 12%, #F2EFE6 0 1px, transparent 1.6px),
+      radial-gradient(circle at 22% 6%, #F2EFE6 0 .8px, transparent 1.4px),
+      radial-gradient(circle at 37% 17%, #F2EFE6 0 1.2px, transparent 1.8px),
+      radial-gradient(circle at 63% 9%, #F2EFE6 0 .8px, transparent 1.4px),
+      radial-gradient(circle at 78% 15%, #F2EFE6 0 1px, transparent 1.6px),
+      radial-gradient(circle at 92% 7%, #F2EFE6 0 .8px, transparent 1.4px),
+      radial-gradient(circle at 14% 31%, #F2EFE6 0 .8px, transparent 1.4px),
+      radial-gradient(circle at 86% 27%, #F2EFE6 0 1.2px, transparent 1.8px),
+      radial-gradient(circle at 5% 44%, #F2EFE6 0 .8px, transparent 1.4px),
+      radial-gradient(circle at 95% 46%, #F2EFE6 0 .8px, transparent 1.4px),
+      radial-gradient(circle at 30% 40%, #FFD166 0 .8px, transparent 1.4px),
+      radial-gradient(circle at 71% 38%, #F2EFE6 0 .8px, transparent 1.4px),
+      radial-gradient(circle at 48% 4%, #FFD166 0 1px, transparent 1.6px),
+      radial-gradient(circle at 56% 24%, #F2EFE6 0 .7px, transparent 1.3px),
+      radial-gradient(circle at 3% 22%, #F2EFE6 0 .7px, transparent 1.3px),
+      radial-gradient(circle at 98% 18%, #F2EFE6 0 .7px, transparent 1.3px);
+  }
+  .stage.shake{animation:shake .36s ease-in-out 1}
+  @keyframes shake{
+    0%,100%{transform:translateX(0)}
+    20%{transform:translateX(-1.6cqw)}
+    40%{transform:translateX(1.4cqw)}
+    60%{transform:translateX(-1cqw)}
+    80%{transform:translateX(.6cqw)}
+  }
+
+  /* HUD */
+  .hud{
+    position:absolute;left:0;right:0;top:0;
+    display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+    padding:3cqw 3.5cqw;z-index:2;
+  }
+  .hearts{display:flex;gap:1cqw;font-size:max(16px,5.6cqw);line-height:1;color:#FF5D73}
+  .hearts span.lost{color:#3A4268}
+  .roundlbl{
+    font-family:var(--serif);font-size:max(13px,4cqw);letter-spacing:.1em;
+    white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--ink);
+  }
+  .mute{justify-self:end;font-size:max(12px,3.4cqw)}
+
+  /* melody dots */
+  .melody{
+    position:absolute;left:0;right:0;top:34cqw;
+    display:flex;flex-direction:column;align-items:center;gap:4.5cqw;z-index:1;
+  }
+  .dots{display:flex;gap:3.2cqw;min-height:5cqw;align-items:center}
+  .dot{
+    width:max(12px,4.6cqw);height:max(12px,4.6cqw);border-radius:50%;
+    border:2px solid #7A83A8;background:transparent;
+    transition:background-color .12s, box-shadow .12s, border-color .12s;
+  }
+  .dot.on{
+    background:var(--c);border-color:var(--c);
+    box-shadow:0 0 2.4cqw color-mix(in srgb, var(--c) 70%, transparent);
+  }
+  .status{
+    margin:0;font-size:max(12px,3.8cqw);color:var(--dim);
+    letter-spacing:.08em;white-space:nowrap;min-height:1.4em;
+  }
+  .stage[data-state="play"] .status{color:var(--ink)}
+
+  /* stones on an arc */
+  .arc{
+    position:absolute;left:12cqw;top:74cqw;width:76cqw;height:38cqw;
+    border:1px solid rgba(255,209,102,.16);border-bottom:none;
+    border-radius:38cqw 38cqw 0 0;pointer-events:none;
+  }
+  .stone{
+    --size:max(48px,17cqw);
+    position:absolute;
+    left:calc(var(--x) * 1cqw);top:calc(var(--y) * 1cqw);
+    width:var(--size);height:var(--size);
+    transform:translate(-50%,-50%) scale(1);
+    border-radius:50%;border:none;padding:0;cursor:pointer;
+    background:radial-gradient(circle at 36% 30%, #3A4268 0%, var(--stone) 48%, #161C36 100%);
+    box-shadow:
+      inset 0 0 0 .6cqw color-mix(in srgb, var(--c) 45%, transparent),
+      inset 0 -1.2cqw 2cqw rgba(0,0,0,.35),
+      0 0 2.2cqw color-mix(in srgb, var(--c) 22%, transparent);
+    transition:transform .14s ease-out, box-shadow .14s ease-out, background .14s ease-out;
+    display:grid;place-items:center;
+  }
+  .stone .key{
+    font-size:max(12px,4cqw);font-weight:600;color:color-mix(in srgb, var(--c) 70%, var(--ink));
+    font-variant-numeric:tabular-nums;pointer-events:none;
+  }
+  .stone.lit{
+    transform:translate(-50%,-50%) scale(1.14);
+    background:radial-gradient(circle at 40% 34%, #FFFFFF 0%, var(--c) 42%, color-mix(in srgb, var(--c) 55%, #000) 100%);
+    box-shadow:
+      0 0 0 .6cqw var(--c),
+      0 0 6cqw var(--c),
+      0 0 13cqw color-mix(in srgb, var(--c) 55%, transparent);
+  }
+  .stone.lit .key{color:var(--night)}
+  .stone:focus-visible{outline:3px solid var(--gold);outline-offset:5px;border-radius:50%}
+  .stage[data-state="listen"] .stone,
+  .stage[data-state="roundclear"] .stone{cursor:default;pointer-events:none}
+
+  /* banners (non-blocking) */
+  .banner{
+    position:absolute;left:50%;top:58cqw;transform:translateX(-50%);
+    z-index:3;pointer-events:none;
+    font-family:var(--serif);font-size:max(16px,6cqw);letter-spacing:.14em;
+    white-space:nowrap;color:var(--ink);
+    padding:1.6cqw 5cqw;border-radius:999px;
+    background:rgba(20,27,51,.86);border:1px solid #3A4370;
+  }
+  .banner.sign{color:var(--gold);border-color:rgba(255,209,102,.45)}
+  [hidden]{display:none!important}
+
+  /* overlays */
+  .overlay{
+    position:absolute;inset:0;z-index:5;
+    background:rgba(14,19,38,.9);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:4cqw;padding:8cqw;text-align:center;
+  }
+  .overlay h2{
+    margin:0;font-family:var(--serif);font-weight:600;
+    font-size:max(20px,8cqw);letter-spacing:.1em;line-height:1.25;
+  }
+  .overlay h2 small{display:block;font-size:max(12px,3.6cqw);color:var(--dim);letter-spacing:.16em;font-weight:400;margin-top:1cqw}
+  .howto{
+    margin:0;padding:0;list-style:none;
+    font-size:max(12px,3.7cqw);line-height:1.75;color:var(--ink);text-align:left;
+  }
+  .howto li{padding-left:1em;text-indent:-1em}
+  .howto li::before{content:"・";color:var(--gold)}
+  .btn{
+    min-height:44px;min-width:44px;
+    padding:2.6cqw 9cqw;border:none;border-radius:999px;cursor:pointer;
+    background:var(--gold);color:var(--night);
+    font-weight:700;font-size:max(14px,4.6cqw);letter-spacing:.12em;white-space:nowrap;
+  }
+  .btn:hover{filter:brightness(1.06)}
+  .btn:focus-visible{outline:3px solid var(--ink);outline-offset:4px;border-radius:999px}
+  .rank{
+    font-family:var(--serif);font-size:max(48px,22cqw);line-height:1;color:var(--gold);
+    text-shadow:0 0 5cqw rgba(255,209,102,.45);
+  }
+  .stats{
+    display:grid;grid-template-columns:auto auto;gap:1.2cqw 6cqw;margin:0;
+    font-size:max(13px,4.2cqw);font-variant-numeric:tabular-nums;
+  }
+  .stats dt{color:var(--dim);text-align:left}
+  .stats dd{margin:0;text-align:right}
+  .history{display:flex;flex-direction:column;gap:2cqw;align-items:center}
+  .history .dots{gap:2.2cqw}
+  .history .dot{width:max(12px,3.6cqw);height:max(12px,3.6cqw)}
+  .row-actions{display:flex;gap:3cqw;flex-wrap:nowrap}
+
+  .foot{
+    width:var(--w);margin:0;text-align:center;
+    font-size:12px;color:var(--dim);white-space:nowrap;letter-spacing:.04em;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation:none!important;transition:none!important}
+    .stone.lit{transform:translate(-50%,-50%) scale(1.04)}
+  }
+</style>
+</head>
+<body>
+  <header class="head">
+    <h1>ひびきのオカリナ<small>〜おとのきおく〜</small></h1>
+    <button type="button" class="ghost" id="resetBtn" aria-label="タイトルにもどる（R）">もどる</button>
+  </header>
+
+  <main class="stage" id="stage" data-state="title" aria-label="ゲーム画面">
+    <div class="hud">
+      <div class="hearts" id="hearts" role="img" aria-label="のこりハート 3"></div>
+      <div class="roundlbl" id="roundLbl">旋律 1 / 3</div>
+      <button type="button" class="ghost mute" id="muteBtn" aria-pressed="false" aria-label="ミュート切替（M）">音 あり</button>
+    </div>
+
+    <div class="melody">
+      <div class="dots" id="dots" aria-hidden="true"></div>
+      <p class="status" id="status" aria-live="polite"></p>
+    </div>
+
+    <div class="arc" aria-hidden="true"></div>
+    <button type="button" class="stone" data-i="0" style="--c:#FF5D73;--x:12;--y:112" aria-label="1 あかの石（ド）"><span class="key">1</span></button>
+    <button type="button" class="stone" data-i="1" style="--c:#FFB03A;--x:23.13;--y:85.13" aria-label="2 こはくの石（レ）"><span class="key">2</span></button>
+    <button type="button" class="stone" data-i="2" style="--c:#7BE0A3;--x:50;--y:74" aria-label="3 みどりの石（ミ）"><span class="key">3</span></button>
+    <button type="button" class="stone" data-i="3" style="--c:#4FC3F7;--x:76.87;--y:85.13" aria-label="4 あおの石（ソ）"><span class="key">4</span></button>
+    <button type="button" class="stone" data-i="4" style="--c:#B388FF;--x:88;--y:112" aria-label="5 むらさきの石（ラ）"><span class="key">5</span></button>
+
+    <div class="banner" id="banner" hidden></div>
+    <div class="banner sign" id="sign" hidden>ひびいた</div>
+
+    <section class="overlay" id="ovTitle" aria-labelledby="ttl">
+      <h2 id="ttl">ひびきのオカリナ<small>おとのきおく</small></h2>
+      <ul class="howto">
+        <li>石が順に光って、旋律を奏でます</li>
+        <li>同じ順番で石をタップしてください</li>
+        <li>旋律は 3音 → 4音 → 5音 と長くなります</li>
+        <li>まちがえるとハートが1つ減ります</li>
+        <li>そのあと、もう一度きけます</li>
+      </ul>
+      <button type="button" class="btn" id="startBtn">はじめる</button>
+    </section>
+
+    <section class="overlay" id="ovClear" aria-labelledby="clr" hidden>
+      <h2 id="clr">旋律がそろった</h2>
+      <div class="rank" id="rank" aria-label="ランク">S</div>
+      <dl class="stats">
+        <dt>タイム</dt><dd id="timeOut">0.0秒</dd>
+        <dt>ミス</dt><dd id="missOut">0</dd>
+      </dl>
+      <div class="history" id="history" aria-hidden="true"></div>
+      <div class="row-actions">
+        <button type="button" class="btn" id="againBtn1">もう一度</button>
+      </div>
+    </section>
+
+    <section class="overlay" id="ovOver" aria-labelledby="ovr" hidden>
+      <h2 id="ovr">旋律がとぎれた<small id="overSub">旋律 1 で終わりました</small></h2>
+      <button type="button" class="btn" id="againBtn2">もう一度</button>
+    </section>
+  </main>
+
+  <p class="foot">石をタップ（キー 1〜5）・ M でミュート</p>
+
+<script>
+(() => {
+  'use strict';
+
+  const LEAD_MS = 800;
+  const NOTE_MS = 500;
+  const NOTE_SOUND_MS = 450;
+  const POST_MELODY_MS = 600;
+  const TAP_MS = 450;
+  const INTERLUDE_MS = 900;
+  const ROUNDS = 3;
+  const MAX_HEARTS = 3;
+  const MISS_PAUSE_MS = 700;
+
+  const DEMO = new URLSearchParams(location.search).has('demo');
+  const DEMO_MELODIES = [[2, 0, 4], [1, 3, 0, 4], [4, 2, 0, 3, 1]];
+  const FREQ = [523.25, 587.33, 659.25, 783.99, 880.00];
+  const COLORS = ['#FF5D73', '#FFB03A', '#7BE0A3', '#4FC3F7', '#B388FF'];
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  const $ = (s) => document.querySelector(s);
+  const stage = $('#stage');
+  const stones = Array.from(document.querySelectorAll('.stone'));
+  const dotsEl = $('#dots');
+  const statusEl = $('#status');
+  const heartsEl = $('#hearts');
+  const roundLbl = $('#roundLbl');
+  const banner = $('#banner');
+  const sign = $('#sign');
+  const ovTitle = $('#ovTitle');
+  const ovClear = $('#ovClear');
+  const ovOver = $('#ovOver');
+  const muteBtn = $('#muteBtn');
+
+  const S = { state: 'title', round: 1, hearts: MAX_HEARTS, misses: 0, timeMs: null, melody: [], progress: 0 };
+  let t0 = null;
+  let history = [];
+
+  const hook = (window.__hibiki = {});
+  function sync() {
+    hook.state = S.state;
+    hook.round = S.round;
+    hook.hearts = S.hearts;
+    hook.misses = S.misses;
+    hook.timeMs = S.timeMs;
+    hook.melody = S.melody.slice();
+    hook.progress = S.progress;
+  }
+  function setState(s) {
+    S.state = s;
+    stage.dataset.state = s;
+    sync();
+  }
+
+  /* timers */
+  const timers = new Set();
+  function later(fn, ms) {
+    const id = setTimeout(() => { timers.delete(id); fn(); }, ms);
+    timers.add(id);
+    return id;
+  }
+  function clearTimers() {
+    timers.forEach((id) => clearTimeout(id));
+    timers.clear();
+  }
+
+  /* audio */
+  let ctx = null;
+  let master = null;
+  let muted = false;
+  function ensureAudio() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = muted ? 0 : 0.6;
+      master.connect(ctx.destination);
+    }
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  }
+  function voice(type, freq, start, dur, peak) {
+    if (!ctx) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, start);
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(peak, start + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    o.connect(g);
+    g.connect(master);
+    o.start(start);
+    o.stop(start + dur + 0.03);
+  }
+  function soundStone(i) {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const d = NOTE_SOUND_MS / 1000;
+    voice('sine', FREQ[i], t, d, 0.32);
+    voice('sine', FREQ[i] * 2, t, d, 0.09);
+  }
+  function soundWrong() {
+    if (!ctx) return;
+    voice('sawtooth', 110, ctx.currentTime, 0.25, 0.13);
+  }
+  function soundChime() {
+    if (!ctx) return;
+    const t = ctx.currentTime + 0.12;
+    voice('triangle', 783.99, t, 0.3, 0.2);
+    voice('triangle', 1046.5, t + 0.14, 0.45, 0.2);
+  }
+  function soundFanfare() {
+    if (!ctx) return;
+    const t = ctx.currentTime + 0.18;
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, k) => {
+      const last = k === 3;
+      voice('triangle', f, t + k * 0.12, last ? 0.95 : 0.35, 0.2);
+      voice('sine', f * 2, t + k * 0.12, last ? 0.8 : 0.3, 0.05);
+    });
+  }
+  function toggleMute() {
+    muted = !muted;
+    if (master && ctx) master.gain.setTargetAtTime(muted ? 0 : 0.6, ctx.currentTime, 0.02);
+    muteBtn.textContent = muted ? '音 なし' : '音 あり';
+    muteBtn.setAttribute('aria-pressed', String(muted));
+  }
+
+  /* visuals */
+  function light(i, ms) {
+    const el = stones[i];
+    el.classList.remove('lit');
+    void el.offsetWidth;
+    el.classList.add('lit');
+    later(() => el.classList.remove('lit'), ms);
+  }
+  function unlightAll() { stones.forEach((s) => s.classList.remove('lit')); }
+
+  function buildDots() {
+    dotsEl.textContent = '';
+    for (let k = 0; k < S.melody.length; k++) {
+      const d = document.createElement('span');
+      d.className = 'dot';
+      dotsEl.appendChild(d);
+    }
+  }
+  function fillDot(k, stoneIdx) {
+    const d = dotsEl.children[k];
+    if (!d) return;
+    d.style.setProperty('--c', COLORS[stoneIdx]);
+    d.classList.add('on');
+  }
+  function clearDots() {
+    Array.from(dotsEl.children).forEach((d) => d.classList.remove('on'));
+  }
+  function renderHearts() {
+    heartsEl.textContent = '';
+    for (let k = 0; k < MAX_HEARTS; k++) {
+      const h = document.createElement('span');
+      h.textContent = '♥';
+      if (k >= S.hearts) h.className = 'lost';
+      heartsEl.appendChild(h);
+    }
+    heartsEl.setAttribute('aria-label', 'のこりハート ' + S.hearts);
+  }
+  function renderRound() { roundLbl.textContent = '旋律 ' + S.round + ' / ' + ROUNDS; }
+  function setStatus(t) { statusEl.textContent = t; }
+  function shake() {
+    if (reduceMotion.matches) return;
+    stage.classList.remove('shake');
+    void stage.offsetWidth;
+    stage.classList.add('shake');
+  }
+  stage.addEventListener('animationend', () => stage.classList.remove('shake'));
+
+  function hideOverlays() {
+    ovTitle.hidden = true;
+    ovClear.hidden = true;
+    ovOver.hidden = true;
+    banner.hidden = true;
+    sign.hidden = true;
+  }
+
+  function makeMelody(n) {
+    const m = [];
+    while (m.length < n) {
+      const r = Math.floor(Math.random() * 5);
+      if (m.length && m[m.length - 1] === r) continue;
+      m.push(r);
+    }
+    return m;
+  }
+
+  /* flow */
+  function goTitle() {
+    clearTimers();
+    unlightAll();
+    hideOverlays();
+    S.round = 1;
+    S.hearts = MAX_HEARTS;
+    S.misses = 0;
+    S.timeMs = null;
+    S.melody = [];
+    S.progress = 0;
+    t0 = null;
+    history = [];
+    dotsEl.textContent = '';
+    setStatus('');
+    renderHearts();
+    renderRound();
+    ovTitle.hidden = false;
+    setState('title');
+    $('#startBtn').focus({ preventScroll: true });
+  }
+
+  function startGame() {
+    ensureAudio();
+    clearTimers();
+    unlightAll();
+    hideOverlays();
+    S.round = 1;
+    S.hearts = MAX_HEARTS;
+    S.misses = 0;
+    S.timeMs = null;
+    S.progress = 0;
+    t0 = null;
+    history = [];
+    renderHearts();
+    startRound(false);
+  }
+
+  function startRound(retry) {
+    if (!retry) {
+      S.melody = DEMO ? DEMO_MELODIES[S.round - 1].slice() : makeMelody(S.round + 2);
+    }
+    S.progress = 0;
+    renderRound();
+    buildDots();
+    setStatus('');
+    banner.textContent = retry ? 'もういちど きいて' : '第' + S.round + 'の旋律';
+    banner.hidden = false;
+    setState('listen');
+    later(playMelody, LEAD_MS);
+  }
+
+  function playMelody() {
+    banner.hidden = true;
+    if (t0 === null) t0 = performance.now();
+    setStatus('おてほんを きいて');
+    const m = S.melody;
+    m.forEach((s, k) => {
+      later(() => {
+        light(s, NOTE_SOUND_MS);
+        soundStone(s);
+        fillDot(k, s);
+      }, k * NOTE_MS);
+    });
+    later(beginPlay, m.length * NOTE_MS + POST_MELODY_MS);
+  }
+
+  function beginPlay() {
+    clearDots();
+    S.progress = 0;
+    setState('play');
+    setStatus('おなじ順に 石をタップ');
+    if (DEMO) {
+      S.melody.forEach((s, k) => later(() => onStoneInput(s), (k + 1) * TAP_MS));
+    }
+  }
+
+  function onStoneInput(i) {
+    ensureAudio();
+    if (S.state !== 'play') return;
+    if (i === S.melody[S.progress]) {
+      light(i, 300);
+      soundStone(i);
+      fillDot(S.progress, i);
+      S.progress++;
+      sync();
+      if (S.progress === S.melody.length) roundCleared();
+    } else {
+      light(i, 200);
+      miss();
+    }
+  }
+
+  function miss() {
+    soundWrong();
+    S.misses++;
+    S.hearts = Math.max(0, S.hearts - 1);
+    renderHearts();
+    shake();
+    clearDots();
+    if (S.hearts <= 0) {
+      setStatus('');
+      setState('gameover');
+      later(showGameover, MISS_PAUSE_MS);
+    } else {
+      setStatus('ちがう音でした');
+      S.progress = 0;
+      setState('listen');
+      later(() => startRound(true), MISS_PAUSE_MS);
+    }
+  }
+
+  function roundCleared() {
+    history.push(S.melody.slice());
+    if (S.round >= ROUNDS) { finish(); return; }
+    setState('roundclear');
+    setStatus('');
+    soundChime();
+    sign.hidden = false;
+    later(() => {
+      sign.hidden = true;
+      S.round++;
+      startRound(false);
+    }, INTERLUDE_MS);
+  }
+
+  function finish() {
+    S.timeMs = Math.round(performance.now() - (t0 === null ? performance.now() : t0));
+    setStatus('');
+    setState('clear');
+    soundFanfare();
+    $('#rank').textContent = S.misses === 0 ? 'S' : S.misses === 1 ? 'A' : 'B';
+    $('#timeOut').textContent = (S.timeMs / 1000).toFixed(1) + '秒';
+    $('#missOut').textContent = String(S.misses);
+    const h = $('#history');
+    h.textContent = '';
+    history.forEach((m) => {
+      const row = document.createElement('div');
+      row.className = 'dots';
+      m.forEach((s) => {
+        const d = document.createElement('span');
+        d.className = 'dot on';
+        d.style.setProperty('--c', COLORS[s]);
+        row.appendChild(d);
+      });
+      h.appendChild(row);
+    });
+    ovClear.hidden = false;
+    if (!DEMO) $('#againBtn1').focus({ preventScroll: true });
+  }
+
+  function showGameover() {
+    $('#overSub').textContent = '旋律 ' + S.round + ' で終わりました';
+    ovOver.hidden = false;
+    $('#againBtn2').focus({ preventScroll: true });
+  }
+
+  /* input */
+  stones.forEach((el, i) => el.addEventListener('click', () => onStoneInput(i)));
+  $('#startBtn').addEventListener('click', startGame);
+  $('#againBtn1').addEventListener('click', startGame);
+  $('#againBtn2').addEventListener('click', startGame);
+  $('#resetBtn').addEventListener('click', goTitle);
+  muteBtn.addEventListener('click', () => { ensureAudio(); toggleMute(); });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    if (k >= '1' && k <= '5') { e.preventDefault(); onStoneInput(Number(k) - 1); return; }
+    if (k === 'm' || k === 'M') { ensureAudio(); toggleMute(); return; }
+    if (k === 'r' || k === 'R') { goTitle(); return; }
+    if (k === ' ' || k === 'Enter') {
+      if (e.target instanceof HTMLButtonElement) return;
+      if (S.state === 'title' || S.state === 'clear' || S.state === 'gameover') {
+        e.preventDefault();
+        startGame();
+      }
+    }
+  });
+
+  /* boot */
+  renderHearts();
+  renderRound();
+  sync();
+  if (DEMO) {
+    startGame();
+  } else {
+    $('#startBtn').focus({ preventScroll: true });
+  }
+})();
+</script>
+</body>
+</html>

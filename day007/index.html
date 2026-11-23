@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BPブレイブ 〜ためて4れんげき〜</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%23FF7A1A'/%3E%3C/svg%3E">
+<style>
+/* ===== トークン ===== */
+:root{
+  --night:#23264F;   /* 夜の対決場：背景・文字 */
+  --parch:#FFF3D6;   /* 羊皮紙パネル：ログ・ボタン・表 */
+  --ember:#FF7A1A;   /* 残り火：攻撃・ゴロンの目・BPコインの芯 */
+  --heal:#37C871;    /* 回復の緑：HPバー・ヒール */
+  --blue:#4AA8FF;    /* プレイヤーの青：ルカ・ブレイブ */
+  --rock:#8A8FA3;    /* 岩の灰：ゴロン・デフォルト */
+  --debt:#7A2A3A;    /* 借りたBP（残り火×夜から派生） */
+  --font:"Hiragino Maru Gothic ProN","Zen Maru Gothic",sans-serif;
+  --golem:min(55%, 34dvh);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--font);font-weight:400;color:var(--parch);
+  background:radial-gradient(120% 60% at 50% 18%, #33376a 0%, var(--night) 60%), var(--night);
+  display:flex;justify-content:center;overflow:hidden;
+}
+button{font-family:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--ember);outline-offset:3px;border-radius:12px}
+
+.app{
+  position:relative;width:100%;max-width:480px;height:100dvh;
+  display:flex;flex-direction:column;
+  padding:max(10px, env(safe-area-inset-top)) 14px max(12px, env(safe-area-inset-bottom));
+  gap:10px;
+}
+
+/* ===== 上段：ゴロン ===== */
+.enemy{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;position:relative}
+.enemy-head{width:100%;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.enemy-name{font-weight:800;font-size:1.15rem;letter-spacing:.04em}
+.turn{font-weight:700;font-size:.9rem;color:var(--night);background:var(--parch);border-radius:999px;padding:2px 12px;white-space:nowrap}
+.hpbar{width:100%;height:12px;border-radius:999px;background:rgba(0,0,0,.35);overflow:hidden;margin-top:6px;box-shadow:inset 0 0 0 2px rgba(255,243,214,.15)}
+.hpbar i{display:block;height:100%;width:100%;border-radius:inherit;transition:width .3s ease}
+.enemy .hpbar i{background:linear-gradient(90deg,var(--ember),#ffb070)}
+.hpnum{align-self:flex-end;font-size:.8rem;font-weight:700;opacity:.85;margin-top:2px}
+.arena{flex:1 1 auto;min-height:0;width:100%;display:flex;align-items:flex-end;justify-content:center;position:relative}
+.arena::after{ /* 地面の影 */
+  content:"";position:absolute;bottom:2px;left:50%;width:calc(var(--golem) * 1.1);height:16px;transform:translateX(-50%);
+  background:radial-gradient(closest-side,rgba(0,0,0,.45),transparent);
+}
+.golem{width:var(--golem);max-height:100%;height:auto;display:block;position:relative;z-index:1}
+.golem .eye{fill:var(--ember);transition:fill .2s}
+.golem .glow{fill:var(--ember);opacity:.35}
+.golem.charging .glow{opacity:.8;animation:pulse .5s ease-in-out infinite alternate}
+.golem.charging .eye{fill:#fff0c0}
+.golem.down{opacity:.35;filter:grayscale(1);transition:opacity .5s, filter .5s}
+.shake{animation:shake .28s linear}
+@keyframes shake{20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+@keyframes pulse{to{opacity:.35}}
+.pop{
+  position:absolute;left:50%;top:30%;z-index:2;transform:translate(-50%,-50%);
+  font-weight:800;font-size:2rem;color:var(--parch);
+  text-shadow:0 3px 0 var(--ember),0 0 14px rgba(255,122,26,.8);
+  animation:pop .6s ease-out forwards;pointer-events:none;
+}
+@keyframes pop{0%{transform:translate(-50%,-50%) scale(.4);opacity:0}25%{transform:translate(-50%,-50%) scale(1.2);opacity:1}70%{opacity:1}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
+
+/* ===== 中段：BPコイン＋ログ ===== */
+.bp{display:flex;align-items:center;gap:10px}
+.bp-label{min-width:4.2em;font-weight:800;font-size:1.05rem;text-align:center;line-height:1.1;white-space:nowrap}
+.bp-label small{display:block;font-weight:400;font-size:.7rem;opacity:.75}
+.coins{flex:1;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;align-items:center;height:44px}
+.coin{
+  aspect-ratio:1;width:100%;max-width:36px;justify-self:center;border-radius:50%;
+  border:2px dashed rgba(255,243,214,.25);position:relative;transition:background .25s,border-color .25s,box-shadow .25s;
+}
+.coin.zero{border-style:solid;border-color:rgba(255,243,214,.5);width:30%}
+.coin.on{
+  border:2px solid #fff6dc;
+  background:radial-gradient(circle at 35% 30%,#fffbe8 0 18%,#ffd98a 35%,var(--ember) 100%);
+  box-shadow:0 0 12px 2px rgba(255,190,90,.75),0 0 28px rgba(255,122,26,.35);
+  animation:float 2.4s ease-in-out infinite;
+}
+.coin.on:nth-child(6){animation-delay:-.8s}.coin.on:nth-child(7){animation-delay:-1.6s}
+.coin.debt{border:2px solid #a8475a;background:radial-gradient(circle at 40% 35%,#9c3a4c,var(--debt) 70%,#3a1420);box-shadow:inset 0 2px 6px rgba(0,0,0,.5)}
+.coin.spent{animation:spend .35s ease-out}
+@keyframes float{50%{transform:translateY(-5px)}}
+@keyframes spend{0%{transform:scale(1.35)}100%{transform:scale(1)}}
+
+.log{
+  background:var(--parch);color:var(--night);border-radius:14px;padding:8px 12px;
+  font-size:.86rem;line-height:1.45;height:calc(1.45em * 3 + 16px);overflow:hidden;
+  box-shadow:0 4px 0 rgba(0,0,0,.25);flex:none;
+}
+.log p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.55}
+.log p:last-child{opacity:1;font-weight:700}
+
+/* ===== 下段：ルカ＋コマンド ===== */
+.player{display:flex;align-items:center;gap:12px;background:rgba(255,243,214,.08);border:2px solid rgba(255,243,214,.18);border-radius:16px;padding:8px 12px;flex:none}
+.player-info{flex:1;min-width:0}
+.player-name{font-weight:800;font-size:1rem;white-space:nowrap}
+.player .hpbar i{background:linear-gradient(90deg,var(--heal),#8fe8b0)}
+.player .hpbar.low i{background:linear-gradient(90deg,var(--ember),#ffc070)}
+.player .hpnum{display:block;text-align:right}
+.guard-badge{font-size:.72rem;font-weight:700;background:var(--rock);color:var(--night);border-radius:999px;padding:1px 8px;margin-left:6px;visibility:hidden}
+.guard-badge.on{visibility:visible}
+
+/* ルカ（CSSだけで描いた丸い剣士） */
+.luka{position:relative;width:56px;height:60px;flex:none}
+.luka .cape{position:absolute;left:8px;top:22px;width:40px;height:34px;background:#2d7fd6;border-radius:40% 40% 46% 46%/30% 30% 70% 70%;transform:skewX(-8deg)}
+.luka .body{position:absolute;left:14px;top:26px;width:28px;height:28px;border-radius:50%;background:var(--blue);box-shadow:inset -4px -4px 0 rgba(0,0,0,.15)}
+.luka .head{position:absolute;left:12px;top:2px;width:32px;height:30px;border-radius:50%;background:#ffdcb4;box-shadow:inset -3px -3px 0 rgba(0,0,0,.08)}
+.luka .head::before{content:"";position:absolute;left:-1px;top:-2px;width:34px;height:14px;border-radius:50% 50% 30% 30%;background:#5a3b2a}
+.luka .head::after{content:"";position:absolute;left:9px;top:15px;width:4px;height:5px;border-radius:2px;background:var(--night);box-shadow:10px 0 0 var(--night)}
+.luka .sword{position:absolute;right:0;top:10px;width:5px;height:34px;border-radius:2px;background:linear-gradient(#f4f6ff,#b9c0d8);transform:rotate(22deg);transform-origin:bottom center}
+.luka .sword::after{content:"";position:absolute;left:-5px;bottom:4px;width:15px;height:5px;border-radius:2px;background:var(--ember)}
+.luka.hurt{animation:shake .28s linear}
+.luka.swing .sword{animation:swing .3s ease-out}
+@keyframes swing{0%{transform:rotate(22deg)}40%{transform:rotate(-40deg)}100%{transform:rotate(22deg)}}
+
+.cmds{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:none}
+.cmd{
+  position:relative;min-height:56px;border:none;border-radius:14px;cursor:pointer;
+  background:var(--parch);color:var(--night);text-align:left;padding:8px 12px 8px 16px;
+  box-shadow:0 4px 0 var(--c, var(--rock)),inset 6px 0 0 var(--c, var(--rock));
+  display:flex;flex-direction:column;justify-content:center;gap:1px;transition:transform .08s, filter .15s;
+}
+.cmd b{font-weight:800;font-size:1.08rem;white-space:nowrap}
+.cmd span{font-size:.74rem;font-weight:700;opacity:.7;white-space:nowrap}
+.cmd kbd{position:absolute;right:10px;top:8px;font-family:inherit;font-size:.72rem;font-weight:700;opacity:.55}
+.cmd:active{transform:translateY(3px);box-shadow:0 1px 0 var(--c),inset 6px 0 0 var(--c)}
+.cmd[aria-disabled="true"]{filter:grayscale(.85) brightness(.75);cursor:not-allowed}
+.cmd[data-cmd="fight"]{--c:var(--ember)}
+.cmd[data-cmd="brave"]{--c:var(--blue)}
+.cmd[data-cmd="default"]{--c:var(--rock)}
+.cmd[data-cmd="heal"]{--c:var(--heal)}
+
+/* ===== タイトル・リザルト ===== */
+.overlay{
+  position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:24px;background:rgba(35,38,79,.95);text-align:center;gap:14px;overflow:auto;
+}
+.overlay[hidden]{display:none}
+.title-main{font-weight:800;font-size:clamp(2.2rem,11vw,3.2rem);line-height:1.05}
+.title-main em{font-style:normal;color:var(--ember)}
+.title-sub{font-weight:700;font-size:1.05rem;opacity:.9}
+.howto{background:var(--parch);color:var(--night);border-radius:16px;padding:12px 16px;text-align:left;font-size:.9rem;line-height:1.7;max-width:340px}
+.howto li{list-style:none;padding-left:1.2em;text-indent:-1.2em}
+.howto li::before{content:"●";color:var(--ember);font-size:.7em;margin-right:.6em;vertical-align:.15em}
+.big-btn{min-height:52px;min-width:200px;border:none;border-radius:999px;background:var(--ember);color:var(--night);font-weight:800;font-size:1.15rem;cursor:pointer;box-shadow:0 5px 0 #b24f0c}
+.big-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #b24f0c}
+.hint{font-size:.78rem;opacity:.7}
+.res-head{font-weight:800;font-size:2.4rem}
+.res-head.lose{color:var(--rock)}
+.res-rank{font-weight:800;font-size:3.2rem;line-height:1;color:var(--ember);text-shadow:0 0 20px rgba(255,122,26,.5);white-space:nowrap}
+.res-rank.none{font-size:1.6rem;color:var(--rock);text-shadow:none}
+.res-table{background:var(--parch);color:var(--night);border-radius:16px;padding:10px 18px;min-width:240px}
+.res-table div{display:flex;justify-content:space-between;gap:20px;padding:4px 0;font-size:.95rem}
+.res-table div+div{border-top:1px dashed rgba(35,38,79,.2)}
+.res-table b{font-weight:800}
+.flash{position:absolute;inset:0;z-index:5;pointer-events:none;background:var(--ember);opacity:0}
+.flash.on{animation:flash .35s ease-out}
+@keyframes flash{0%{opacity:.35}100%{opacity:0}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ===== 低丈画面 ===== */
+@media (max-height:700px){
+  :root{--golem:min(55%, 26dvh)}
+  .app{gap:7px;padding-top:8px;padding-bottom:8px}
+  .cmd{min-height:48px;padding-top:5px;padding-bottom:5px}
+  .coins{height:36px}
+  .log{font-size:.8rem}
+  .player{padding:5px 10px}
+  .luka{transform:scale(.85);margin:-4px}
+  .howto{font-size:.84rem;line-height:1.55}
+  .overlay{gap:10px;padding:16px}
+}
+@media (max-height:600px){
+  :root{--golem:min(50%, 22dvh)}
+  .cmd span{display:none}
+  .cmd{min-height:44px}
+  .res-rank{font-size:2.4rem}
+}
+@media (max-width:360px){ .cmd span{font-size:.68rem} .cmd b{font-size:1rem} }
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none !important;transition:none !important}
+}
+</style>
+</head>
+<body>
+<main class="app" id="app">
+  <!-- 上段：敵 -->
+  <section class="enemy" aria-label="敵">
+    <div class="enemy-head">
+      <span class="enemy-name">岩の魔物 ゴロン</span>
+      <span class="turn" id="turn">ターン 0</span>
+    </div>
+    <div class="hpbar" role="progressbar" aria-label="ゴロンのHP" aria-valuemin="0" aria-valuemax="150" aria-valuenow="150" id="ehpBar"><i id="ehpFill"></i></div>
+    <span class="hpnum" id="ehpNum">150 / 150</span>
+    <div class="arena" id="arena">
+      <!-- ゴロン：重い岩の塊（自作SVG） -->
+      <svg class="golem" id="golem" viewBox="0 0 220 190" aria-hidden="true">
+        <!-- 脚 -->
+        <path d="M62 150 L58 186 L96 186 L92 148Z" fill="#6c7086"/>
+        <path d="M128 148 L124 186 L162 186 L158 150Z" fill="#6c7086"/>
+        <!-- 腕（岩のこぶし） -->
+        <path d="M30 78 L6 110 L14 150 L46 156 L58 120 L52 86Z" fill="#7b8096"/>
+        <path d="M14 150 L46 156 L40 138 L18 134Z" fill="#5b5f74"/>
+        <path d="M190 78 L214 110 L206 150 L174 156 L162 120 L168 86Z" fill="#7b8096"/>
+        <path d="M206 150 L174 156 L180 138 L202 134Z" fill="#5b5f74"/>
+        <!-- 胴体 -->
+        <path d="M46 70 L80 46 L140 46 L176 70 L184 122 L160 160 L60 160 L36 122Z" fill="#8A8FA3"/>
+        <path d="M46 70 L80 46 L110 58 L96 100 L40 104Z" fill="#a4a9bc"/>
+        <path d="M176 70 L184 122 L160 160 L132 118Z" fill="#6f748a"/>
+        <path d="M60 160 L96 128 L132 132 L160 160Z" fill="#767b91"/>
+        <!-- 割れ目 -->
+        <path d="M100 66 L92 92 L104 108 L96 130" stroke="#4a4e62" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <path d="M150 84 L140 100 L148 112" stroke="#4a4e62" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <!-- 胸の残り火の核 -->
+        <circle class="glow" cx="120" cy="108" r="14"/>
+        <path class="eye" d="M120 98 L128 108 L120 118 L112 108Z"/>
+        <!-- 頭 -->
+        <path d="M78 14 L142 14 L154 40 L142 58 L78 58 L66 40Z" fill="#9a9fb2"/>
+        <path d="M78 14 L142 14 L134 26 L84 26Z" fill="#b5b9c9"/>
+        <path d="M142 58 L154 40 L142 14 L138 50Z" fill="#767b91"/>
+        <!-- 目 -->
+        <circle class="glow" cx="94" cy="38" r="9"/>
+        <circle class="glow" cx="126" cy="38" r="9"/>
+        <rect class="eye" x="86" y="34" width="16" height="7" rx="3"/>
+        <rect class="eye" x="118" y="34" width="16" height="7" rx="3"/>
+        <!-- 苔 -->
+        <path d="M80 46 L92 46 L88 52Z M150 70 L160 74 L152 78Z" fill="#37C871" opacity=".55"/>
+      </svg>
+    </div>
+  </section>
+
+  <!-- 中段：BPとログ -->
+  <section class="bp" aria-label="BP">
+    <div class="bp-label" id="bpLabel">BP 0<small>-3〜+3</small></div>
+    <div class="coins" id="coins" aria-hidden="true"></div>
+  </section>
+  <div class="log" id="log" aria-live="polite"></div>
+
+  <!-- 下段：ルカとコマンド -->
+  <section class="player" aria-label="ルカ">
+    <div class="luka" id="luka" aria-hidden="true"><div class="cape"></div><div class="body"></div><div class="head"></div><div class="sword"></div></div>
+    <div class="player-info">
+      <div class="player-name">剣士 ルカ<span class="guard-badge" id="guard">防御中</span></div>
+      <div class="hpbar" role="progressbar" aria-label="ルカのHP" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" id="phpBar"><i id="phpFill"></i></div>
+      <span class="hpnum" id="phpNum">100 / 100</span>
+    </div>
+  </section>
+  <div class="cmds" role="group" aria-label="コマンド">
+    <button class="cmd" data-cmd="fight"><kbd>1</kbd><b>たたかう</b><span>攻撃してターン終了</span></button>
+    <button class="cmd" data-cmd="brave"><kbd>2</kbd><b>ブレイブ</b><span>BPを1使って追撃</span></button>
+    <button class="cmd" data-cmd="default"><kbd>3</kbd><b>デフォルト</b><span>守ってBP+1</span></button>
+    <button class="cmd" data-cmd="heal"><kbd>4</kbd><b>ヒール</b><span>BPを1使ってHP+25</span></button>
+  </div>
+
+  <div class="flash" id="flash"></div>
+
+  <!-- タイトル -->
+  <section class="overlay" id="titleScreen" aria-label="タイトル">
+    <h1 class="title-main"><em>BP</em>ブレイブ</h1>
+    <p class="title-sub">〜ためて4れんげき〜</p>
+    <ul class="howto">
+      <li>デフォルトで身を守りながら、BPをためる</li>
+      <li>ブレイブはBPを使って、同じターンにもう1回攻撃（そのターンは守れない）</li>
+      <li>次のターンにBP+1してもマイナスなら、そのターンは動けない</li>
+    </ul>
+    <button class="big-btn" id="startBtn">スタート</button>
+    <p class="hint">Enter・Spaceでも始まります　1〜4キーでコマンド</p>
+  </section>
+
+  <!-- リザルト -->
+  <section class="overlay" id="resultScreen" aria-label="結果" hidden>
+    <h2 class="res-head" id="resHead">勝利！</h2>
+    <div class="res-rank" id="resRank">ランク S</div>
+    <div class="res-table">
+      <div><span>ターン数</span><b id="resTurn">0</b></div>
+      <div><span>残りHP</span><b id="resHp">0</b></div>
+      <div><span>攻撃回数</span><b id="resAtk">0</b></div>
+      <div><span>最大ブレイブ連撃</span><b id="resBrave">0</b></div>
+    </div>
+    <button class="big-btn" id="retryBtn">もう一度</button>
+  </section>
+  <p class="sr" id="sr" aria-live="assertive"></p>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const DEMO = new URLSearchParams(location.search).has('demo');
+  let demoActive = DEMO;
+
+  // 演出の間隔（ミリ秒）
+  const T = { hit: 350, enemyPre: 350, enemyPost: 350, turnStart: 250, cmdGap: 900, cmdMin: 450 };
+
+  const S = {
+    state: 'title', hp: 100, enemyHp: 150, bp: 0, turn: 0, rank: null,
+    attacks: 0, maxBrave: 0, braveThis: 0, guard: false, busy: true,
+    t0: performance.now(), endT: 0, logs: []
+  };
+
+  // ===== デモ計測 =====
+  window.__demoEvents = [];
+  function ev(type, extra) {
+    const e = { t: Math.round(performance.now() - S.t0) / 1000, type };
+    if (extra) Object.assign(e, extra);
+    window.__demoEvents.push(e);
+  }
+  function sync() {
+    const now = S.endT || performance.now();
+    window.__bpbrave = {
+      state: S.state, hp: S.hp, enemyHp: S.enemyHp, bp: S.bp, turn: S.turn, rank: S.rank,
+      attacks: S.attacks, maxBrave: S.maxBrave,
+      timeMs: S.state === 'title' ? 0 : Math.round(now - S.t0)
+    };
+  }
+  sync();
+  setInterval(sync, 100);
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const rand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+
+  // ===== 効果音（WebAudioで内製。最初の操作で起動） =====
+  let ac = null;
+  function ensureAudio() {
+    try {
+      if (!ac) {
+        const C = window.AudioContext || window.webkitAudioContext;
+        if (C) ac = new C();
+      }
+      if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+    } catch (e) { ac = null; }
+  }
+  window.addEventListener('pointerdown', ensureAudio);
+  window.addEventListener('keydown', ensureAudio);
+  const audioOk = () => ac && ac.state === 'running';
+  function tone(freq, dur, type, vol, delay, slideTo) {
+    if (!audioOk()) return;
+    const t = ac.currentTime + (delay || 0);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol || 0.15, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(ac.destination);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq, delay) {
+    if (!audioOk()) return;
+    const t = ac.currentTime + (delay || 0);
+    const len = Math.floor(ac.sampleRate * dur);
+    const buf = ac.createBuffer(1, len, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    src.buffer = buf; f.type = 'bandpass'; f.frequency.value = freq || 2000; f.Q.value = 0.8;
+    g.gain.value = vol || 0.3;
+    src.connect(f).connect(g).connect(ac.destination);
+    src.start(t);
+  }
+  const sfx = {
+    slash() { noise(0.14, 0.45, 3200); tone(900, 0.1, 'triangle', 0.08, 0, 300); },
+    brave(n) { const b = 660 * Math.pow(1.19, n - 1); tone(b, 0.25, 'sine', 0.16); tone(b * 1.5, 0.3, 'sine', 0.1, 0.06); },
+    shield() { tone(180, 0.25, 'square', 0.07, 0, 120); noise(0.12, 0.25, 900); tone(520, 0.3, 'triangle', 0.08, 0.04); },
+    heal() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.22, 'sine', 0.11, i * 0.07)); },
+    hurt(strong) { tone(strong ? 120 : 160, 0.28, 'sawtooth', 0.12, 0, 60); noise(0.2, strong ? 0.5 : 0.3, 400); },
+    win() { [523, 659, 784, 659, 784, 1047].forEach((f, i) => tone(f, i === 5 ? 0.6 : 0.16, 'triangle', 0.14, i * 0.13)); },
+    lose() { [392, 330, 262].forEach((f, i) => tone(f, 0.35, 'triangle', 0.12, i * 0.25)); },
+    deny() { tone(200, 0.12, 'square', 0.05); }
+  };
+
+  // ===== 描画 =====
+  const coinsEl = $('coins');
+  for (let v = -3; v <= 3; v++) {
+    const c = document.createElement('span');
+    c.className = 'coin' + (v === 0 ? ' zero' : '');
+    c.dataset.v = v;
+    coinsEl.appendChild(c);
+  }
+  const coins = [...coinsEl.children];
+  const btns = [...document.querySelectorAll('.cmd')];
+
+  function invalidReason(cmd) {
+    if (S.state !== 'battle') return 'いまは選べない';
+    if (cmd === 'brave' && S.bp <= -3) return 'これ以上BPは借りられない';
+    if (cmd === 'default' && S.braveThis > 0) return 'ブレイブ中は守れない';
+    if (cmd === 'heal' && S.bp < 1) return 'BPが足りない';
+    if (cmd === 'heal' && S.hp >= 100) return 'HPは満タン';
+    return '';
+  }
+
+  function render() {
+    $('turn').textContent = 'ターン ' + S.turn;
+    const e = Math.max(0, S.enemyHp);
+    $('ehpFill').style.width = (e / 150 * 100) + '%';
+    $('ehpNum').textContent = e + ' / 150';
+    $('ehpBar').setAttribute('aria-valuenow', e);
+    $('phpFill').style.width = S.hp + '%';
+    $('phpNum').textContent = S.hp + ' / 100';
+    $('phpBar').setAttribute('aria-valuenow', S.hp);
+    $('phpBar').classList.toggle('low', S.hp <= 30);
+    $('guard').classList.toggle('on', S.guard);
+    const sign = S.bp > 0 ? '+' + S.bp : S.bp < 0 ? '−' + (-S.bp) : '0';
+    $('bpLabel').innerHTML = 'BP ' + sign + '<small>-3〜+3</small>';
+    coins.forEach((c) => {
+      const v = +c.dataset.v;
+      if (v === 0) return;
+      c.classList.toggle('on', S.bp > 0 && v > 0 && v <= S.bp);
+      c.classList.toggle('debt', S.bp < 0 && v < 0 && v >= S.bp);
+    });
+    btns.forEach((b) => {
+      const off = S.busy || demoActive || !!invalidReason(b.dataset.cmd);
+      b.setAttribute('aria-disabled', off ? 'true' : 'false');
+    });
+    const lines = S.logs.slice(-3);
+    const logEl = $('log');
+    logEl.textContent = '';
+    lines.forEach((l) => { const p = document.createElement('p'); p.textContent = l; logEl.appendChild(p); });
+    sync();
+  }
+
+  function log(msg) { S.logs.push(msg); render(); }
+
+  function retrigger(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  function popDamage(n) {
+    const p = document.createElement('div');
+    p.className = 'pop';
+    p.textContent = n;
+    $('arena').appendChild(p);
+    setTimeout(() => p.remove(), 650);
+  }
+  function spendCoinFx(prevBp) {
+    // 使った（または借りた）コインを一瞬はねさせる
+    const v = prevBp > 0 ? prevBp : prevBp - 1;
+    const c = coins.find((x) => +x.dataset.v === v);
+    if (c) retrigger(c, 'spent');
+  }
+
+  // ===== 戦闘の流れ =====
+  async function startBattle() {
+    Object.assign(S, {
+      state: 'battle', hp: 100, enemyHp: 150, bp: 0, turn: 0, rank: null,
+      attacks: 0, maxBrave: 0, braveThis: 0, guard: false, busy: true,
+      t0: performance.now(), endT: 0, logs: []
+    });
+    window.__demoEvents = [];
+    $('titleScreen').hidden = true;
+    $('resultScreen').hidden = true;
+    $('golem').classList.remove('down', 'charging');
+    ev('start', { demo: demoActive });
+    log('ゴロンがあらわれた！');
+    if (!demoActive) btns[0].focus();
+    await sleep(T.turnStart);
+    await turnStart();
+  }
+
+  async function turnStart() {
+    while (S.state === 'battle') {
+      S.turn++;
+      S.bp = Math.min(3, S.bp + 1);
+      S.braveThis = 0;
+      S.guard = false;
+      ev('turnStart', { turn: S.turn, bp: S.bp });
+      log('ターン' + S.turn + '　BP+1');
+      $('golem').classList.toggle('charging', S.turn === 4);
+      if (S.turn === 4) log('ゴロンが力をためている…');
+      if (S.bp < 0) {
+        // BPがマイナスのままなので行動できない
+        ev('bpWait', { bp: S.bp });
+        log('BPがマイナス。ルカは動けない');
+        S.busy = true; render();
+        await sleep(T.turnStart * 2);
+        await enemyAttack();
+        continue;
+      }
+      S.busy = false;
+      render();
+      return;
+    }
+  }
+
+  async function playerHit(isBrave) {
+    const dmg = demoActive ? 18 : rand(14, 20);
+    S.enemyHp -= dmg;
+    S.attacks++;
+    ev('hit', { dmg, enemyHp: S.enemyHp, brave: !!isBrave });
+    retrigger($('luka'), 'swing');
+    retrigger($('golem'), 'shake');
+    popDamage(dmg);
+    sfx.slash();
+    log((isBrave ? 'ブレイブ！ルカの追撃、' : 'ルカの攻撃！ゴロンに') + dmg + 'ダメージ');
+    await sleep(T.hit);
+    if (S.enemyHp <= 0) { await win(); return true; }
+    return false;
+  }
+
+  async function act(cmd) {
+    if (S.state !== 'battle' || S.busy) return false;
+    const why = invalidReason(cmd);
+    if (why) { sfx.deny(); log(why); return false; }
+    S.busy = true;
+    ev('cmd', { cmd, bp: S.bp });
+    render();
+    if (cmd === 'fight') {
+      if (await playerHit(false)) return true;
+      await endTurn();
+    } else if (cmd === 'brave') {
+      const prev = S.bp;
+      S.bp -= 1;
+      S.braveThis++;
+      S.maxBrave = Math.max(S.maxBrave, S.braveThis);
+      spendCoinFx(prev);
+      sfx.brave(S.braveThis);
+      render();
+      if (await playerHit(true)) return true;
+      S.busy = false; // 行動は消費しない
+      render();
+    } else if (cmd === 'default') {
+      S.guard = true;
+      S.bp = Math.min(3, S.bp + 1);
+      sfx.shield();
+      log('ルカは身を守った。BP+1');
+      await sleep(T.hit);
+      await endTurn();
+    } else if (cmd === 'heal') {
+      const prev = S.bp;
+      S.bp -= 1;
+      const before = S.hp;
+      S.hp = Math.min(100, S.hp + 25);
+      spendCoinFx(prev);
+      sfx.heal();
+      ev('heal', { amount: S.hp - before });
+      log('ヒール！HPが' + (S.hp - before) + '回復');
+      await sleep(T.hit);
+      await endTurn();
+    }
+    return true;
+  }
+
+  async function endTurn() {
+    S.busy = true;
+    render();
+    await enemyAttack();
+    if (S.state !== 'battle') return;
+    await turnStart();
+  }
+
+  async function enemyAttack() {
+    await sleep(T.enemyPre);
+    if (S.state !== 'battle') return;
+    const strong = S.turn === 4;
+    const base = demoActive ? (strong ? 20 : 10) : (strong ? rand(18, 24) : rand(8, 14));
+    const dmg = S.guard ? Math.floor(base / 2) : base;
+    S.hp = Math.max(0, S.hp - dmg);
+    ev('enemyAttack', { dmg, strong, hp: S.hp });
+    retrigger($('luka'), 'hurt');
+    if (strong) retrigger($('flash'), 'on');
+    sfx.hurt(strong);
+    $('golem').classList.remove('charging');
+    if (strong) log('ゴロンのつよわざ！ルカは' + dmg + 'ダメージ' + (S.guard ? '（守りで半減）' : ''));
+    else if (S.guard) log('ゴロンの攻撃。守りで' + dmg + 'ダメージに減らした');
+    else log('ゴロンの攻撃。ルカは' + dmg + 'ダメージ');
+    await sleep(T.enemyPost);
+    if (S.hp <= 0) await lose();
+  }
+
+  const rankOf = (turns) => turns <= 7 ? 'S' : turns <= 9 ? 'A' : turns <= 12 ? 'B' : 'C';
+
+  async function win() {
+    S.state = 'win';
+    S.busy = true;
+    S.rank = rankOf(S.turn);
+    S.endT = performance.now();
+    $('golem').classList.add('down');
+    $('golem').classList.remove('charging');
+    ev('win', { turn: S.turn, hp: S.hp, rank: S.rank });
+    log('ゴロンをたおした！');
+    sfx.win();
+    await sleep(600);
+    showResult(true);
+  }
+
+  async function lose() {
+    S.state = 'lose';
+    S.busy = true;
+    S.rank = null;
+    S.endT = performance.now();
+    ev('lose', { turn: S.turn });
+    log('ルカはたおれた…');
+    sfx.lose();
+    await sleep(600);
+    showResult(false);
+  }
+
+  function showResult(won) {
+    const h = $('resHead');
+    h.textContent = won ? '勝利！' : '敗北…';
+    h.classList.toggle('lose', !won);
+    const r = $('resRank');
+    r.textContent = won ? 'ランク ' + S.rank : 'ランクなし';
+    r.classList.toggle('none', !won);
+    $('resTurn').textContent = S.turn + 'ターン';
+    $('resHp').textContent = S.hp + ' / 100';
+    $('resAtk').textContent = S.attacks + '回';
+    $('resBrave').textContent = S.maxBrave + '回';
+    $('resultScreen').hidden = false;
+    $('sr').textContent = (won ? '勝利。ランク' + S.rank : '敗北') + '。' + S.turn + 'ターン。';
+    ev('result', { won });
+    render();
+    if (!demoActive) $('retryBtn').focus();
+    demoActive = false; // 「もう一度」からは通常プレイ
+  }
+
+  // ===== 入力 =====
+  btns.forEach((b) => b.addEventListener('click', () => { if (demoActive) return; act(b.dataset.cmd); }));
+  $('startBtn').addEventListener('click', () => { if (S.state === 'title' && !demoActive) startBattle(); });
+  $('retryBtn').addEventListener('click', () => { if (S.state === 'win' || S.state === 'lose') startBattle(); });
+
+  const KEYMAP = { '1': 'fight', '2': 'brave', '3': 'default', '4': 'heal' };
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    const onBtn = e.target && e.target.tagName === 'BUTTON';
+    if (e.key === 'Enter' || e.key === ' ') {
+      if (onBtn) return; // フォーカス中のボタンに任せる
+      if (S.state === 'title' && !demoActive) { e.preventDefault(); startBattle(); }
+      else if ((S.state === 'win' || S.state === 'lose') && !$('resultScreen').hidden) { e.preventDefault(); startBattle(); }
+      return;
+    }
+    if (KEYMAP[e.key] && S.state === 'battle' && !demoActive) { e.preventDefault(); act(KEYMAP[e.key]); }
+  });
+
+  // ===== デモ台本（?demo） =====
+  const SCRIPT = [
+    ['default'],
+    ['brave', 'brave', 'fight'],
+    ['brave', 'brave', 'fight'],
+    ['brave', 'fight'],
+    ['fight']
+  ];
+  async function waitReady() {
+    while (S.state === 'battle' && S.busy) await sleep(30);
+  }
+  async function runDemo() {
+    await sleep(700);
+    startBattle();
+    let last = performance.now();
+    for (const cmds of SCRIPT) {
+      for (const c of cmds) {
+        await waitReady();
+        if (S.state !== 'battle') return;
+        await sleep(Math.max(T.cmdMin, T.cmdGap - (performance.now() - last)));
+        last = performance.now();
+        const ok = await act(c); // ボタンの無効表示とは関係なく内部関数を直接呼ぶ
+        if (!ok) ev('demoError', { cmd: c, turn: S.turn });
+      }
+    }
+  }
+
+  render();
+  if (DEMO) runDemo();
+})();
+</script>
+</body>
+</html>

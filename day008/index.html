@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>メダルスピン 〜めぐるメダルのタイミング〜</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23F5C542'/%3E%3C/svg%3E">
+<style>
+  /* ===== トークン ===== */
+  :root{
+    --night:#1B1440;   /* 夜祭りの藍：背景・インク */
+    --gold:#F5C542;    /* メダルの金：主役の金属・ボタン */
+    --brass:#8A6A1F;   /* 真鍮の陰：縁・区切り線 */
+    --paper:#FFF6DB;   /* 紙の白：お題カード・文字 */
+    --ok:#37C871;      /* 成功の緑 */
+    --ng:#E03131;      /* 失敗の赤 */
+    --font:"Hiragino Maru Gothic ProN","Zen Maru Gothic",sans-serif;
+    /* 極低丈でも0以下にならないよう下限120px */
+    --disk:max(120px, min(320px, 67vw, calc(100dvh - 300px)));
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:var(--font);font-weight:400;color:var(--paper);
+    background:
+      radial-gradient(circle at 50% 46%, #2c2366 0, transparent 62%),
+      radial-gradient(circle at 12% 8%, rgba(245,197,66,.16) 0 2px, transparent 3px) 0 0/46px 46px,
+      var(--night);
+    overflow:hidden;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .app{
+    position:relative;max-width:480px;height:100vh;height:100dvh;margin:0 auto;
+    display:flex;flex-direction:column;gap:10px;
+    padding:max(12px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom));
+  }
+  button{font-family:inherit}
+  :focus-visible{outline:3px solid var(--paper);outline-offset:3px;border-radius:14px}
+
+  /* ===== 上段：お題カード＋HUD（Z字の始点→右上） ===== */
+  .top{display:flex;gap:10px;align-items:stretch;flex:none}
+  .card{
+    flex:1.25;min-width:0;display:flex;align-items:center;gap:10px;
+    background:var(--paper);color:var(--night);
+    border-radius:18px 18px 18px 4px;padding:10px 12px;
+    box-shadow:0 0 0 3px var(--brass), 0 6px 0 0 #120d2e;
+  }
+  .card svg{width:62px;height:62px;flex:none}
+  .card > div{min-width:0}
+  .card .ask{margin:0;font-size:13px;font-weight:700;color:var(--brass)}
+  .card .name{margin:2px 0 0;font-size:24px;font-weight:800;line-height:1.15;white-space:nowrap}
+  .card.pop{animation:pop .35s ease-out}
+  @keyframes pop{0%{transform:scale(.92)}60%{transform:scale(1.04)}100%{transform:scale(1)}}
+  .hud{
+    flex:1;min-width:0;margin:0;display:grid;grid-template-columns:auto 1fr;
+    column-gap:8px;row-gap:2px;align-content:center;font-size:13px;
+    border-left:2px dashed rgba(245,197,66,.45);padding-left:10px;
+  }
+  .hud dt{color:rgba(255,246,219,.7)}
+  .hud dd{margin:0;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+  .hud dd.score{color:var(--gold);font-size:17px;font-weight:800}
+
+  /* ===== 中段：円盤（主役） ===== */
+  .stage{flex:1;min-height:0;display:grid;place-items:center;position:relative}
+  #disk{width:var(--disk);max-width:100%;height:auto;display:block;cursor:pointer;touch-action:manipulation;
+    filter:drop-shadow(0 10px 0 #120d2e)}
+  .bob{animation:bob 2.4s ease-in-out infinite}
+  .bob.b1{animation-delay:-.3s}.bob.b2{animation-delay:-.6s}.bob.b3{animation-delay:-.9s}
+  .bob.b4{animation-delay:-1.2s}.bob.b5{animation-delay:-1.5s}.bob.b6{animation-delay:-1.8s}.bob.b7{animation-delay:-2.1s}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  .wedge.lit{filter:brightness(1.12)}
+
+  .fb{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    padding:12px 18px 10px;border-radius:20px;background:var(--paper);color:var(--night);
+    box-shadow:0 0 0 4px var(--ok);pointer-events:none;
+  }
+  .fb[hidden]{display:none}
+  .fb.ng{box-shadow:0 0 0 4px var(--ng)}
+  .fb svg{width:72px;height:72px}
+  .fb p{margin:0;font-size:22px;font-weight:800;white-space:nowrap}
+  .fb.ok p{color:#1f8a4c}.fb.ng p{color:var(--ng)}
+  .fb small{font-size:13px;font-weight:700;color:var(--brass)}
+  .fb.show{animation:rise .3s ease-out}
+  @keyframes rise{from{transform:translate(-50%,-38%) scale(.85);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+
+  /* ===== 下段：ストップ ===== */
+  .big{
+    display:block;width:100%;min-height:60px;border:0;border-radius:18px;
+    background:linear-gradient(#FFE08A, var(--gold) 55%, #D9A92E);
+    color:var(--night);font-size:24px;font-weight:800;letter-spacing:.08em;white-space:nowrap;
+    box-shadow:0 0 0 3px var(--brass), 0 6px 0 0 #5c4614;cursor:pointer;
+    touch-action:manipulation;
+  }
+  .big:active:not(:disabled){transform:translateY(3px);box-shadow:0 0 0 3px var(--brass), 0 3px 0 0 #5c4614}
+  .big:disabled{opacity:.55;cursor:default}
+  .bottom{flex:none}
+  .bottom .hint{margin:6px 0 0;text-align:center;font-size:12px;color:rgba(255,246,219,.6)}
+
+  /* ===== タイトル・リザルト ===== */
+  /* 中央寄せは先頭・末尾の margin:auto で行う（はみ出した時は上端から始まりスクロールできる） */
+  .screen{
+    position:absolute;inset:0;z-index:5;overflow:auto;
+    display:flex;flex-direction:column;justify-content:flex-start;align-items:center;gap:14px;
+    padding:20px 24px;background:rgba(27,20,64,.94);text-align:center;
+  }
+  .screen[hidden]{display:none}
+  .screen h1,.screen h2{margin:0;font-weight:800;line-height:1.2}
+  .screen h1{font-size:40px;color:var(--gold);text-shadow:0 3px 0 var(--brass)}
+  .screen .sub{margin:-6px 0 0;font-size:15px;font-weight:700}
+  .parade{display:flex;gap:2px;justify-content:center}
+  .parade svg{width:44px;height:44px}
+  .rules{
+    margin:0;padding:14px 18px;background:var(--paper);color:var(--night);
+    border-radius:16px;box-shadow:0 0 0 3px var(--brass);text-align:left;font-size:15px;line-height:1.7;
+    width:100%;max-width:360px;
+  }
+  .rules p{margin:0}
+  .screen .big{max-width:320px}
+  .screen .keys{margin:-4px 0 0;font-size:12px;color:rgba(255,246,219,.6)}
+  .screen > :first-child{margin-top:auto}
+  .screen > :last-child{margin-bottom:auto}
+  .rankmedal{
+    width:120px;height:120px;border-radius:50%;display:grid;place-items:center;
+    background:radial-gradient(circle at 38% 32%, #FFF1BF, var(--gold) 48%, #B8902A);
+    box-shadow:0 0 0 5px var(--brass), inset 0 0 0 8px rgba(138,106,31,.35);
+    color:var(--night);font-size:64px;font-weight:800;
+  }
+  .rankmedal.pop{animation:pop .5s ease-out}
+  .stats{margin:0;display:grid;grid-template-columns:auto auto;gap:4px 24px;font-size:17px;
+    background:var(--paper);color:var(--night);padding:12px 22px;border-radius:16px;box-shadow:0 0 0 3px var(--brass)}
+  .stats dt{text-align:left}
+  .stats dd{margin:0;text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+
+  @media (max-height:640px){
+    .card svg{width:50px;height:50px}
+    .card .name{font-size:20px}
+    .screen{gap:10px}
+    .screen h1{font-size:32px}
+    .rules{font-size:14px;line-height:1.55;padding:10px 14px}
+    .parade svg{width:34px;height:34px}
+    .rankmedal{width:92px;height:92px;font-size:48px}
+  }
+  /* 極狭幅：キャラ名の縮小と折り返しを許す */
+  @media (max-width:370px){
+    .card{gap:8px;padding:10px}
+    .card svg{width:46px;height:46px}
+    .card .name{font-size:19px;white-space:normal}
+  }
+  /* 装飾の揺れ・ポップは止める（円盤の回転はゲームの核なので残す） */
+  @media (prefers-reduced-motion:reduce){
+    .bob,.card.pop,.fb.show,.rankmedal.pop{animation:none}
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <section class="card" id="card" aria-live="polite">
+      <svg viewBox="-40 -42 80 82" id="cardFace" aria-hidden="true"></svg>
+      <div>
+        <p class="ask">この子をよぼう！</p>
+        <p class="name" id="cardName">まるポン</p>
+      </div>
+    </section>
+    <dl class="hud">
+      <dt>ラウンド</dt><dd id="hRound">1/10</dd>
+      <dt>成功</dt><dd id="hHits">0</dd>
+      <dt>コンボ</dt><dd id="hCombo">0</dd>
+      <dt>スコア</dt><dd id="hScore" class="score">0</dd>
+    </dl>
+  </header>
+
+  <main class="stage">
+    <svg id="disk" viewBox="0 0 360 380" role="img" aria-label="回るメダル盤。タップで止まります"></svg>
+    <div class="fb" id="fb" hidden aria-live="assertive">
+      <svg viewBox="-40 -42 80 82" id="fbFace" aria-hidden="true"></svg>
+      <p id="fbText">よんだ！</p>
+      <small id="fbSub"></small>
+    </div>
+  </main>
+
+  <footer class="bottom">
+    <button class="big" id="stopBtn" type="button" disabled>ストップ</button>
+    <p class="hint">Space キーか円盤タップでも止まります</p>
+  </footer>
+
+  <section class="screen" id="title">
+    <h1>メダルスピン</h1>
+    <p class="sub">〜めぐるメダルのタイミング〜</p>
+    <div class="parade" id="parade" aria-hidden="true"></div>
+    <div class="rules">
+      <p>1. 円盤がくるくる回ります。</p>
+      <p>2. お題の子が針の下に来たら「ストップ」。</p>
+      <p>3. 3回連続で当てると2倍。全10回。</p>
+    </div>
+    <button class="big" id="startBtn" type="button">はじめる</button>
+    <p class="keys">Enter か Space でも始められます</p>
+  </section>
+
+  <section class="screen" id="result" hidden>
+    <h2>けっか</h2>
+    <div class="rankmedal" id="rRank" aria-label="ランク">S</div>
+    <dl class="stats">
+      <dt>成功数</dt><dd id="rHits">0/10</dd>
+      <dt>最大コンボ</dt><dd id="rCombo">0</dd>
+      <dt>スコア</dt><dd id="rScore">0</dd>
+    </dl>
+    <button class="big" id="retryBtn" type="button">もう一度</button>
+  </section>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  // ===== 定数（乱数は使わない） =====
+  const ROUNDS = 10, SPEED0 = 270, ACC = 1.10, RESULT_MS = 900;
+  const MIN_SPIN_MS = 250;      // 誤押し防止：回り始めてすぐは止められない
+  const DEMO_MIN_SPIN_MS = 350; // デモの最低回転時間
+  const TARGETS = [0, 4, 2, 6, 1, 5, 3, 7, 4, 0]; // お題の順番（固定）
+  const CHARS = [
+    {name:"まるポン", color:"#FF6B6B"},
+    {name:"きらりん", color:"#FFD43B"},
+    {name:"ぽよん",   color:"#4C6EF5"},
+    {name:"もぐリン", color:"#69DB7C"},
+    {name:"ふわりん", color:"#F783AC"},
+    {name:"ぐるりん", color:"#9775FA"},
+    {name:"ピカリン", color:"#FFA94D"},
+    {name:"すやぴー", color:"#ADB5BD"},
+  ];
+  const INK = "#1B1440";
+  const demo = new URLSearchParams(location.search).has("demo");
+  let demoActive = demo;
+
+  // ===== 公開状態 =====
+  const G = {state:"title", round:0, hits:0, combo:0, maxCombo:0, score:0, rank:"", timeMs:0};
+  window.__medalspin = G;
+  window.__demoEvents = [];
+  let t0 = performance.now();
+  const log = (type) => window.__demoEvents.push({t: Math.round(performance.now() - t0) / 1000, type});
+
+  // ===== 顔のSVG（半径26の丸＋目＋口） =====
+  function spiral(cx, cy){
+    let d = "";
+    for (let k = 0; k <= 30; k++){
+      const a = k / 30 * Math.PI * 5, r = 0.5 + k / 30 * 5.5;
+      d += (k ? "L" : "M") + (cx + r * Math.cos(a)).toFixed(2) + " " + (cy + r * Math.sin(a)).toFixed(2);
+    }
+    return `<path d="${d}" fill="none" stroke="${INK}" stroke-width="1.8" stroke-linecap="round"/>`;
+  }
+  function star(cx, cy, R){
+    const p = [];
+    for (let k = 0; k < 10; k++){
+      const a = -Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? R * 0.45 : R;
+      p.push((cx + r * Math.cos(a)).toFixed(2) + "," + (cy + r * Math.sin(a)).toFixed(2));
+    }
+    return `<polygon points="${p.join(" ")}" fill="${INK}"/>`;
+  }
+  function faceSVG(i){
+    const c = CHARS[i].color, S = `stroke="${INK}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"`;
+    const body = `<circle r="26" fill="${c}" ${S}/>`;
+    const dots = `<circle cx="-9" cy="-4" r="3" fill="${INK}"/><circle cx="9" cy="-4" r="3" fill="${INK}"/>`;
+    switch (i){
+      case 0: // まるポン：丸いほっぺ
+        return body + dots +
+        `<circle cx="-15" cy="6" r="5" fill="#FFC9C9"/><circle cx="15" cy="6" r="5" fill="#FFC9C9"/>` +
+        `<path d="M-7 8 Q0 15 7 8" fill="none" ${S}/>`;
+      case 1: // きらりん：星の目
+        return body + star(-9, -4, 6) + star(9, -4, 6) + `<circle cy="10" r="3" fill="${INK}"/>`;
+      case 2: // ぽよん：水玉
+        return body +
+        `<g fill="#BAC8FF"><circle cx="-15" cy="-13" r="4"/><circle cx="16" cy="-11" r="3"/><circle cx="-16" cy="11" r="3"/><circle cx="13" cy="15" r="4"/><circle cx="0" cy="-19" r="2.5"/></g>` +
+        `<circle cx="-9" cy="-4" r="4.5" fill="#fff"/><circle cx="9" cy="-4" r="4.5" fill="#fff"/>` +
+        `<circle cx="-8" cy="-4" r="2.3" fill="${INK}"/><circle cx="10" cy="-4" r="2.3" fill="${INK}"/>` +
+        `<path d="M-8 9 q4 -4 8 0 t8 0" fill="none" ${S}/>`;
+      case 3: // もぐリン：大きな口
+        return body +
+        `<circle cx="-9" cy="-11" r="2.6" fill="${INK}"/><circle cx="9" cy="-11" r="2.6" fill="${INK}"/>` +
+        `<path d="M-16 0 Q0 28 16 0 Z" fill="${INK}" ${S}/><ellipse cy="12" rx="6" ry="3.5" fill="#FF8787"/>`;
+      case 4: // ふわりん：雲の髪
+        return body +
+        `<g fill="#fff" ${S}><circle cx="-22" cy="-12" r="7"/><circle cx="22" cy="-12" r="7"/><circle cx="-13" cy="-22" r="9"/><circle cx="13" cy="-22" r="9"/><circle cy="-27" r="10"/></g>` +
+        `<path d="M-13 1 q3.5 -5 7 0 M6 1 q3.5 -5 7 0" fill="none" ${S}/>` +
+        `<path d="M-4 9 q4 5 8 0" fill="none" ${S}/>`;
+      case 5: // ぐるりん：ぐるぐる目
+        return body + spiral(-9, -3) + spiral(9, -3) + `<path d="M-5 12 h10" ${S}/>`;
+      case 6: // ピカリン：雷の髪
+        return `<polygon points="-19,-14 -12,-36 -5,-22 2,-40 7,-22 15,-35 19,-14" fill="#FFE066" ${S}/>` + body + dots +
+        `<path d="M-14 -12 l8 3 M14 -12 l-8 3" ${S}/>` +
+        `<path d="M-9 7 Q0 17 9 7 Z" fill="#fff" ${S}/>`;
+      case 7: // すやぴー：ねむい目
+        return body +
+        `<path d="M-13 -3 q4 4 8 0 M5 -3 q4 4 8 0" fill="none" ${S}/>` +
+        `<circle cy="10" r="2.6" fill="${INK}"/>` +
+        `<path d="M17 -30 h8 l-8 8 h8" fill="none" stroke="${INK}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
+  }
+
+  // ===== 円盤を組み立てる =====
+  const CX = 180, CY = 200, R_WEDGE = 148, R_DIAL = 158;
+  // 角度aは「上から時計回り」の度数
+  const pt = (a, r) => [CX + r * Math.sin(a * Math.PI / 180), CY - r * Math.cos(a * Math.PI / 180)];
+  function mix(hex, to, k){
+    const a = parseInt(hex.slice(1), 16), b = parseInt(to.slice(1), 16);
+    const ch = (s) => Math.round(((a >> s) & 255) * (1 - k) + ((b >> s) & 255) * k);
+    return "#" + ((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1);
+  }
+  const disk = document.getElementById("disk");
+  function buildDisk(){
+    let s = `<defs>
+      <linearGradient id="bezel" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#FFE9A8"/><stop offset=".45" stop-color="#F5C542"/>
+        <stop offset=".7" stop-color="#B8902A"/><stop offset="1" stop-color="#F0C75A"/></linearGradient>
+      <radialGradient id="medal" cx=".38" cy=".32" r=".75">
+        <stop offset="0" stop-color="#FFF4C8"/><stop offset=".5" stop-color="#F5C542"/><stop offset="1" stop-color="#A9801F"/></radialGradient>
+    </defs>`;
+    // 懐中時計の竜頭（針の付け根）
+    s += `<rect x="168" y="4" width="24" height="14" rx="4" fill="url(#bezel)" stroke="#8A6A1F" stroke-width="2"/>`;
+    s += `<rect x="174" y="16" width="12" height="10" fill="url(#bezel)" stroke="#8A6A1F" stroke-width="2"/>`;
+    // 真鍮の外枠＋ローレット
+    s += `<circle cx="${CX}" cy="${CY}" r="176" fill="url(#bezel)" stroke="#8A6A1F" stroke-width="3"/>`;
+    let knurl = "";
+    for (let k = 0; k < 120; k++){
+      const [x1, y1] = pt(k * 3, 170), [x2, y2] = pt(k * 3, 175);
+      knurl += `M${x1.toFixed(1)} ${y1.toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}`;
+    }
+    s += `<path d="${knurl}" stroke="#8A6A1F" stroke-width="1.2" opacity=".7"/>`;
+    s += `<circle cx="${CX}" cy="${CY}" r="${R_DIAL + 6}" fill="${INK}"/>`;
+    // ---- 回る部分 ----
+    s += `<g id="rotor">`;
+    s += `<circle cx="${CX}" cy="${CY}" r="${R_DIAL}" fill="#FFF6DB"/>`;
+    for (let i = 0; i < 8; i++){
+      const [x0, y0] = pt(i * 45 - 22.5, R_WEDGE), [x1, y1] = pt(i * 45 + 22.5, R_WEDGE);
+      s += `<path class="wedge" d="M${CX} ${CY}L${x0.toFixed(2)} ${y0.toFixed(2)}A${R_WEDGE} ${R_WEDGE} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)}Z" fill="${mix(CHARS[i].color, "#FFF6DB", 0.55)}" stroke="#8A6A1F" stroke-width="2"/>`;
+    }
+    // 文字盤の目盛り（60分）
+    let ticks = "";
+    for (let k = 0; k < 60; k++){
+      const long = k % 5 === 0;
+      const [x1, y1] = pt(k * 6, R_DIAL - (long ? 9 : 4)), [x2, y2] = pt(k * 6, R_DIAL);
+      ticks += `M${x1.toFixed(1)} ${y1.toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}`;
+    }
+    s += `<path d="${ticks}" stroke="${INK}" stroke-width="1.6"/>`;
+    // 仲間たち（外向きに立つ）
+    for (let i = 0; i < 8; i++){
+      const [x, y] = pt(i * 45, 100);
+      s += `<g transform="translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${i * 45}) scale(1.05)"><g class="bob b${i}">${faceSVG(i)}</g></g>`;
+    }
+    // 中心の金メダル
+    s += `<circle cx="${CX}" cy="${CY}" r="38" fill="url(#medal)" stroke="#8A6A1F" stroke-width="3"/>`;
+    s += `<circle cx="${CX}" cy="${CY}" r="29" fill="none" stroke="#8A6A1F" stroke-width="1.5" stroke-dasharray="2 3"/>`;
+    const st = [];
+    for (let k = 0; k < 16; k++){
+      const [x, y] = pt(k * 22.5, k % 2 ? 9 : 20);
+      st.push(x.toFixed(1) + "," + y.toFixed(1));
+    }
+    s += `<polygon points="${st.join(" ")}" fill="#FFE9A8" stroke="#8A6A1F" stroke-width="1.5" stroke-linejoin="round"/>`;
+    s += `</g>`;
+    // ---- 針（上部固定） ----
+    s += `<g id="needle"><path d="M168 20 L192 20 L180 58 Z" fill="${INK}" stroke="#FFF6DB" stroke-width="2.5" stroke-linejoin="round"/>
+      <circle cx="180" cy="22" r="5" fill="#F5C542" stroke="#8A6A1F" stroke-width="1.5"/></g>`;
+    disk.innerHTML = s;
+  }
+
+  // ===== DOM =====
+  const $ = (id) => document.getElementById(id);
+  const stopBtn = $("stopBtn"), startBtn = $("startBtn"), retryBtn = $("retryBtn");
+  const card = $("card"), fb = $("fb");
+  buildDisk();
+  const rotor = $("rotor");
+  const wedges = [...disk.querySelectorAll(".wedge")];
+  // パレードは上下に4揺れるぶん、上端に余白を足す
+  $("parade").innerHTML = CHARS.map((_, i) => `<svg viewBox="-40 -46 80 86"><g class="bob b${i}">${faceSVG(i)}</g></svg>`).join("");
+
+  // ===== 効果音（WebAudio・ユーザー操作後にだけ作る） =====
+  let ac = null;
+  function ensureAudio(){
+    try{
+      if (!ac){ const C = window.AudioContext || window.webkitAudioContext; if (C) ac = new C(); }
+      if (ac && ac.state === "suspended") ac.resume().catch(() => {});
+    }catch(e){ ac = null; }
+  }
+  function tone(f, dur, type = "sine", vol = .1, delay = 0, f2 = 0){
+    try{
+    if (!ac || ac.state !== "running") return;
+    const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + 0.02);
+    }catch(e){ /* 効果音の例外でゲームを止めない */ }
+  }
+  const sfx = {
+    tick(){ tone(1900, .025, "square", .025); },                       // 区画通過チック
+    stop(){ tone(320, .09, "triangle", .14, 0, 140); },                // ストップ音
+    hit(){ [1046.5, 1318.5, 1568].forEach((f, k) => tone(f, .35, "sine", .12, k * .07)); }, // 成功チャイム
+    miss(){ tone(118, .38, "sawtooth", .07); tone(112, .38, "square", .04); },            // 失敗ブザー
+    fanfare(){                                                          // リザルト
+      [[523.3,0,.16],[659.3,.15,.16],[784,.3,.16],[1046.5,.45,.5]].forEach(([f, d, l]) => { tone(f, l, "triangle", .12, d); tone(f / 2, l, "sine", .06, d); });
+    },
+  };
+
+  // ===== ゲーム進行 =====
+  let angle = 0, speed = SPEED0, phase = "none", spinStart = 0, lastSeg = -1, lastTick = 0, last = performance.now();
+  const mod = (a, n) => ((a % n) + n) % n;
+  // 円盤が時計回りにangle度回ると、上の針は円盤上の(-angle)度を指す
+  const currentSeg = () => Math.floor(mod(mod(-angle, 360) + 22.5, 360) / 45) % 8;
+  const target = () => TARGETS[G.round - 1];
+  const rankOf = (h) => h >= 10 ? "S" : h >= 8 ? "A" : h >= 6 ? "B" : "C";
+
+  function drawRotor(){ rotor.setAttribute("transform", `rotate(${angle.toFixed(3)} ${CX} ${CY})`); }
+  function hud(){
+    $("hRound").textContent = `${Math.max(G.round, 1)}/${ROUNDS}`;
+    $("hHits").textContent = G.hits;
+    $("hCombo").textContent = G.combo;
+    $("hScore").textContent = G.score;
+  }
+  function setCard(i){
+    $("cardFace").innerHTML = faceSVG(i);
+    $("cardName").textContent = CHARS[i].name;
+    card.classList.remove("pop"); void card.offsetWidth; card.classList.add("pop");
+  }
+
+  function startGame(){
+    if (G.state === "playing") return;
+    Object.assign(G, {state:"playing", round:0, hits:0, combo:0, maxCombo:0, score:0, rank:"", timeMs:0});
+    t0 = performance.now();
+    window.__demoEvents = [];
+    log("game_start");
+    $("title").hidden = true; $("result").hidden = true;
+    nextRound();
+  }
+  function nextRound(){
+    G.round++;
+    speed = SPEED0 * Math.pow(ACC, G.round - 1); // 270度/秒 × 1.10^(ラウンド-1)
+    fb.hidden = true;
+    wedges.forEach(w => w.classList.remove("lit"));
+    setCard(target()); hud();
+    phase = "spin"; spinStart = performance.now();
+    stopBtn.disabled = false;
+    stopBtn.focus({preventScroll:true});
+    log("round_start");
+  }
+  function doStop(){
+    if (G.state !== "playing" || phase !== "spin") return;
+    if (performance.now() - spinStart < MIN_SPIN_MS) return;
+    phase = "show"; // 押した瞬間（表示中）の角度で即停止。減速なし
+    stopBtn.disabled = true;
+    const seg = currentSeg(), ok = seg === target();
+    log("stop"); sfx.stop();
+    wedges[seg].classList.add("lit");
+    if (ok){
+      G.hits++; G.combo++;
+      const mult = G.combo >= 3 ? 2 : 1;  // 3連続目から2倍
+      G.score += 100 * mult;
+      G.maxCombo = Math.max(G.maxCombo, G.combo);
+      log("hit"); sfx.hit();
+      showFb(true, seg, mult);
+    } else {
+      G.combo = 0;
+      log("miss"); sfx.miss();
+      showFb(false, seg, 1);
+    }
+    hud();
+    setTimeout(() => { G.round >= ROUNDS ? finish() : nextRound(); }, RESULT_MS);
+  }
+  function showFb(ok, seg, mult){
+    $("fbFace").innerHTML = faceSVG(seg);
+    $("fbText").textContent = ok ? "よんだ！" : "ちがう子がきた…";
+    $("fbSub").textContent = ok ? `${CHARS[seg].name}　+${100 * mult}${mult > 1 ? "（2倍）" : ""}` : `${CHARS[seg].name}が来ちゃった`;
+    fb.className = "fb " + (ok ? "ok" : "ng");
+    fb.hidden = false; void fb.offsetWidth; fb.classList.add("show");
+  }
+  function finish(){
+    phase = "none";
+    G.state = "result"; G.rank = rankOf(G.hits); G.timeMs = Math.round(performance.now() - t0);
+    fb.hidden = true;
+    log("result"); sfx.fanfare();
+    $("rHits").textContent = `${G.hits}/${ROUNDS}`;
+    $("rCombo").textContent = G.maxCombo;
+    $("rScore").textContent = G.score;
+    const rm = $("rRank"); rm.textContent = G.rank; rm.setAttribute("aria-label", `ランク ${G.rank}`);
+    rm.classList.remove("pop"); void rm.offsetWidth; rm.classList.add("pop");
+    $("result").hidden = false;
+    demoActive = false; // 「もう一度」からは人が遊ぶ
+    retryBtn.focus({preventScroll:true});
+  }
+
+  // ===== メインループ =====
+  function frame(now){
+    const dt = Math.min(now - last, 50) / 1000; last = now; // 最大でも1フレーム32度未満＝区画(45度)を飛び越さない
+    if (phase === "spin"){
+      angle = mod(angle + speed * dt, 360);
+      drawRotor();
+      const seg = currentSeg();
+      if (seg !== lastSeg){ if (now - lastTick > 28){ sfx.tick(); lastTick = now; } lastSeg = seg; }
+      // デモ：針がお題の区画に入ったフレームで自動ストップ（ボタンの状態とは無関係に進む）
+      if (demoActive && now - spinStart >= DEMO_MIN_SPIN_MS && seg === target()) doStop();
+    }
+    if (G.state === "playing") G.timeMs = Math.round(now - t0);
+    requestAnimationFrame(frame);
+  }
+  drawRotor();
+  setCard(TARGETS[0]); hud();
+  requestAnimationFrame(frame);
+
+  // ===== 入力 =====
+  // デモ中の「はじめる」は無効（600ms後のタイマーだけが開始する）
+  startBtn.addEventListener("click", () => { if (demoActive) return; ensureAudio(); startGame(); });
+  retryBtn.addEventListener("click", () => { ensureAudio(); startGame(); });
+  stopBtn.addEventListener("click", () => { ensureAudio(); if (!demoActive) doStop(); });
+  disk.addEventListener("pointerdown", (e) => { e.preventDefault(); ensureAudio(); if (!demoActive) doStop(); });
+  window.addEventListener("keydown", (e) => {
+    if (e.repeat) return;
+    const k = e.key;
+    if (k !== " " && k !== "Enter") return;
+    // Enter：ボタンにフォーカスがある時はボタンの既定動作（click）に任せる
+    if (k === "Enter" && e.target instanceof Element && e.target.closest("button")) return;
+    e.preventDefault(); ensureAudio(); // Space のページスクロールはここで防ぐ
+    if (G.state === "title" || G.state === "result"){ if (!demoActive) startGame(); }
+    else if (k === " " && !demoActive) doStop();
+  });
+
+  if (demo) setTimeout(startGame, 600);
+})();
+</script>
+</body>
+</html>

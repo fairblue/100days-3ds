@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>キャッチリング 〜まるのタイミング〜</title>
+<style>
+:root{
+  --grass:#2E7D4F;--sky:#7EC8E3;--deep:#1F6FA8;--cream:#FFF8E7;--sun:#FFC53D;--red:#E4572E;--ink:#233026;
+  --font:"Hiragino Maru Gothic ProN","Hiragino Sans",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{
+  display:flex;min-height:100vh;min-height:100dvh;
+  background:linear-gradient(180deg,var(--sky) 0%,#BDE5F1 58%,#8CCB86 58%,#5FA867 100%);
+  font-family:var(--font);color:var(--ink);
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+}
+#app{
+  margin:auto; /* 低丈画面でも上端が切れない */
+  width:min(480px,100%);min-height:min(800px,100dvh);
+  display:flex;flex-direction:column;
+  padding:max(10px,1.6dvh) 16px max(14px,2dvh);
+}
+.screen{display:flex;flex-direction:column;align-items:center;flex:1;gap:max(10px,1.5dvh)}
+.screen[hidden]{display:none}
+h1,h2{margin:0;font-weight:800;letter-spacing:.02em}
+button{font-family:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--deep);outline-offset:3px}
+.btn{
+  min-height:max(56px,7dvh);min-width:max(200px,50%);
+  padding:0 28px;border:3px solid var(--ink);border-radius:999px;
+  background:var(--red);color:var(--cream);font-size:max(22px,2.8dvh);font-weight:800;
+  box-shadow:0 5px 0 var(--ink);cursor:pointer;touch-action:manipulation;
+  transition:transform .08s,box-shadow .08s;
+}
+.btn:active{transform:translateY(4px);box-shadow:0 1px 0 var(--ink)}
+.btn.is-off:active{transform:none;box-shadow:0 5px 0 var(--ink)}
+.btn:disabled,.btn.is-off{background:#B9B3A6;color:#4a4a42;cursor:default}
+.card{
+  background:var(--cream);border:3px solid var(--ink);border-radius:24px;
+  padding:max(14px,2dvh) 18px;width:100%;box-shadow:0 5px 0 rgba(35,48,38,.25);
+}
+.nb{display:inline-block}
+.small{font-size:13px;line-height:1.6}
+
+/* タイトル */
+#title{justify-content:center;text-align:center}
+.logo{font-size:max(40px,5.6dvh);color:var(--cream);-webkit-text-stroke:2px var(--ink);paint-order:stroke fill;text-shadow:0 4px 0 var(--ink);line-height:1.1}
+.logo-sub{font-size:max(18px,2.4dvh);font-weight:800;color:var(--ink);margin-top:4px}
+.hero{width:max(200px,min(70%,30dvh));height:auto;overflow:visible}
+.lead{font-size:max(16px,2dvh);line-height:1.7;margin:0;text-wrap:balance}
+.howto{text-align:left;margin:0;padding-left:1.2em}
+.howto li{margin:2px 0}
+
+/* プレイ */
+#hud{
+  display:flex;justify-content:space-between;gap:8px;width:100%;
+  background:var(--cream);border:3px solid var(--ink);border-radius:18px;padding:8px 12px;
+}
+.hud-item{display:flex;flex-direction:column;align-items:center;flex:1;min-width:0}
+.hud-label{font-size:12px;font-weight:700;opacity:.8}
+.hud-val{font-size:max(20px,2.6dvh);font-weight:800;font-variant-numeric:tabular-nums}
+#comboBox.hot .hud-val{color:var(--red)}
+#comboBox.hot .hud-val::after{content:" 2ばい";font-size:12px}
+#cname{font-size:max(22px,3dvh);color:var(--cream);-webkit-text-stroke:1.5px var(--ink);paint-order:stroke fill;text-shadow:0 3px 0 var(--ink);text-align:center;min-height:1.3em}
+#field{
+  width:max(230px,min(100%,380px,46dvh));aspect-ratio:1/1;
+  border-radius:50%;cursor:pointer;touch-action:manipulation;position:relative;flex-shrink:0;
+}
+#field svg{width:100%;height:100%;overflow:visible;display:block}
+#msg{
+  min-height:max(52px,6.5dvh);font-size:max(20px,2.7dvh);font-weight:800;text-align:center;
+  display:flex;align-items:center;justify-content:center;line-height:1.3;
+}
+#msg .pts{display:block;font-size:max(15px,1.9dvh);font-weight:700}
+.controls{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
+#throwBtn{width:min(100%,340px);font-size:max(28px,3.6dvh);min-height:max(64px,8.5dvh)}
+.demo-badge{font-size:13px;font-weight:800;background:var(--ink);color:var(--sun);padding:3px 10px;border-radius:999px}
+
+/* リザルト */
+#result{justify-content:center;text-align:center}
+.rank{font-size:max(88px,12dvh);font-weight:800;line-height:1;color:var(--sun);-webkit-text-stroke:3px var(--ink);paint-order:stroke fill;text-shadow:0 6px 0 var(--ink)}
+.score-big{font-size:max(36px,4.6dvh);font-weight:800;font-variant-numeric:tabular-nums}
+.stats{display:grid;grid-template-columns:1fr auto;gap:6px 16px;margin:0;font-size:max(16px,2dvh);text-align:left}
+.stats dt{font-weight:700}
+.stats dd{margin:0;font-weight:800;text-align:right;font-variant-numeric:tabular-nums}
+
+/* 装飾アニメーション */
+.bob{animation:bob 1.6s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-5px)}}
+.ripple{animation:rip 2.4s ease-out infinite;transform-origin:0 0}
+@keyframes rip{from{transform:scale(.6);opacity:.55}to{transform:scale(1.25);opacity:0}}
+@media (prefers-reduced-motion:reduce){
+  .bob,.ripple{animation:none}
+  .ripple{opacity:0}
+  .btn{transition:none}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- タイトル -->
+  <section id="title" class="screen" aria-labelledby="ttl">
+    <div>
+      <h1 id="ttl" class="logo">キャッチリング</h1>
+      <div class="logo-sub">〜まるのタイミング〜</div>
+    </div>
+    <svg class="hero" viewBox="-120 -110 240 220" aria-hidden="true">
+      <circle r="100" fill="#2E7D4F" stroke="#233026" stroke-width="3"/>
+      <circle r="72" fill="#7EC8E3" stroke="#1F6FA8" stroke-width="3"/>
+      <circle r="64" fill="none" stroke="#FFC53D" stroke-width="10" opacity=".9"/>
+      <g id="heroCreature" class="bob"></g>
+      <g transform="translate(78 62) rotate(-18) scale(1.6)" id="heroBall"></g>
+    </svg>
+    <p class="lead"><span class="nb">ちぢむ輪が</span><span class="nb">黄色い輪に重なったら、</span><span class="nb">ボールをなげよう！</span></p>
+    <button id="startBtn" class="btn" type="button">はじめる</button>
+    <div class="card small">
+      <ul class="howto">
+        <li>タップ・スペースキー・「なげる！」ボタンでなげる</li>
+        <li>★パーフェクト150　◎グレート100　○グッド50</li>
+        <li>★か◎が3回つづくと、とくてん2ばい</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- プレイ -->
+  <section id="play" class="screen" hidden aria-label="プレイ画面">
+    <div id="hud">
+      <div class="hud-item"><span class="hud-label">ラウンド</span><span class="hud-val" id="hRound">1/10</span></div>
+      <div class="hud-item"><span class="hud-label">スコア</span><span class="hud-val" id="hScore">0</span></div>
+      <div class="hud-item" id="comboBox"><span class="hud-label">コンボ</span><span class="hud-val" id="hCombo">0</span></div>
+    </div>
+    <h2 id="cname" aria-live="polite"></h2>
+    <div id="field" role="button" tabindex="0" aria-label="庭の池。タップでボールをなげる">
+      <svg viewBox="-160 -160 320 320" aria-hidden="true">
+        <defs>
+          <radialGradient id="pondG" cx="50%" cy="40%" r="60%">
+            <stop offset="0" stop-color="#A9DDF0"/><stop offset="1" stop-color="#7EC8E3"/>
+          </radialGradient>
+        </defs>
+        <circle r="156" fill="#2E7D4F" stroke="#233026" stroke-width="3"/>
+        <g id="tufts" fill="#3F9A62"></g>
+        <circle r="104" fill="url(#pondG)" stroke="#1F6FA8" stroke-width="3"/>
+        <!-- 判定ゾーン: Good 36-48 / 82-96, Great 48-58 / 70-82, Perfect 58-70 -->
+        <circle r="42" fill="none" stroke="#FFF8E7" stroke-width="12" opacity=".35"/>
+        <circle r="89" fill="none" stroke="#FFF8E7" stroke-width="14" opacity=".35"/>
+        <circle r="53" fill="none" stroke="#FFF8E7" stroke-width="10" opacity=".7"/>
+        <circle r="76" fill="none" stroke="#FFF8E7" stroke-width="12" opacity=".7"/>
+        <circle r="64" fill="none" stroke="#FFC53D" stroke-width="12" opacity=".95"/>
+        <g class="ripple"><circle r="100" fill="none" stroke="#FFF8E7" stroke-width="2"/></g>
+        <ellipse cx="0" cy="40" rx="34" ry="8" fill="#1F6FA8" opacity=".35" id="shadow"/>
+        <g id="creature"></g>
+        <circle id="ring" r="140" fill="none" stroke="#1F6FA8" stroke-width="6"/>
+        <circle id="ringIn" r="137" fill="none" stroke="#FFF8E7" stroke-width="2"/>
+        <g id="ball" opacity="0"></g>
+        <g id="dots" transform="translate(0 62)"></g>
+      </svg>
+    </div>
+    <div id="msg" aria-live="polite"></div>
+    <div class="controls">
+      <button id="throwBtn" class="btn" type="button">なげる！</button>
+      <span class="small" id="hint">フィールドのタップ・スペースキーでもなげられます</span>
+    </div>
+  </section>
+
+  <!-- リザルト -->
+  <section id="result" class="screen" hidden aria-labelledby="rttl">
+    <h2 id="rttl" style="font-size:max(26px,3.4dvh)">けっか</h2>
+    <div class="card">
+      <div class="small" style="font-weight:800">ランク</div>
+      <div class="rank" id="rRank">S</div>
+      <div class="score-big" id="rScore">0 てん</div>
+    </div>
+    <div class="card">
+      <dl class="stats">
+        <dt>★ パーフェクト</dt><dd id="rP">0</dd>
+        <dt>◎ グレート</dt><dd id="rG">0</dd>
+        <dt>○ グッド</dt><dd id="rGd">0</dd>
+        <dt>× ミス</dt><dd id="rM">0</dd>
+        <dt>さいだいコンボ</dt><dd id="rC">0</dd>
+        <dt>タイム</dt><dd id="rT">0.0 びょう</dd>
+      </dl>
+    </div>
+    <button id="againBtn" class="btn" type="button">もういちど</button>
+  </section>
+</div>
+
+<script>
+(function(){
+'use strict';
+var INK='#233026';
+var $=function(id){return document.getElementById(id);};
+var reduceMQ=window.matchMedia?window.matchMedia('(prefers-reduced-motion: reduce)'):null;
+function reduced(){return !!(reduceMQ&&reduceMQ.matches);}
+
+/* ---------- SVG パーツ ---------- */
+function starPts(R,r,n){
+  var p=[];for(var i=0;i<n*2;i++){var a=-Math.PI/2+i*Math.PI/n,rr=i%2?r:R;p.push((Math.cos(a)*rr).toFixed(2)+','+(Math.sin(a)*rr).toFixed(2));}
+  return p.join(' ');
+}
+// キャッチボール：太陽黄の毬に水色ドット＋星型ボタン（赤白ツートーンは避ける）
+var BALL_SVG=
+  '<circle r="16" fill="#FFC53D"/>'+
+  '<circle cx="-8" cy="-7" r="2.6" fill="#1F6FA8"/>'+
+  '<circle cx="7" cy="-9" r="2.2" fill="#1F6FA8"/>'+
+  '<circle cx="-3" cy="8" r="2.4" fill="#1F6FA8"/>'+
+  '<circle cx="9" cy="4" r="2" fill="#1F6FA8"/>'+
+  '<circle cx="-10" cy="2" r="1.8" fill="#1F6FA8"/>'+
+  '<circle r="16" fill="none" stroke="'+INK+'" stroke-width="2.5"/>'+
+  '<polygon points="'+starPts(7,3.2,5)+'" fill="#FFF8E7" stroke="'+INK+'" stroke-width="1.6" stroke-linejoin="round"/>'+
+  '<ellipse cx="-7" cy="-9" rx="4" ry="2.2" fill="#fff" opacity=".6" transform="rotate(-30 -7 -9)"/>';
+
+function eyes(t){
+  var k=INK;
+  var dot=function(x){return '<circle cx="'+x+'" cy="-6" r="5" fill="'+k+'"/><circle cx="'+(x+1.6)+'" cy="-8" r="1.7" fill="#fff"/>';};
+  var arc=function(x){return '<path d="M'+(x-6)+' -4 Q'+x+' -13 '+(x+6)+' -4" fill="none" stroke="'+k+'" stroke-width="3.2" stroke-linecap="round"/>';};
+  var sleepy=function(x){return '<path d="M'+(x-6)+' -7 Q'+x+' -1 '+(x+6)+' -7" fill="none" stroke="'+k+'" stroke-width="3.2" stroke-linecap="round"/>';};
+  var big=function(x){return '<ellipse cx="'+x+'" cy="-6" rx="6.5" ry="8" fill="'+k+'"/><circle cx="'+(x+2)+'" cy="-9" r="2.4" fill="#fff"/><circle cx="'+(x-2)+'" cy="-2" r="1.2" fill="#fff"/>';};
+  var spark=function(x){return '<circle cx="'+x+'" cy="-6" r="6" fill="'+k+'"/><polygon transform="translate('+(x+1.5)+' -8)" points="'+starPts(3.2,1.3,4)+'" fill="#fff"/>';};
+  switch(t){
+    case 'happy':return arc(-15)+arc(15);
+    case 'sleepy':return sleepy(-15)+sleepy(15);
+    case 'big':return big(-15)+big(15);
+    case 'spark':return spark(-15)+spark(15);
+    case 'wink':return dot(-15)+arc(15);
+    default:return dot(-15)+dot(15);
+  }
+}
+function mouth(t){
+  var s=' fill="none" stroke="'+INK+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"';
+  switch(t){
+    case 'cat':return '<path d="M-8 9 Q-4 14 0 9 Q4 14 8 9"'+s+'/>';
+    case 'open':return '<path d="M-7 8 Q0 20 7 8Z" fill="#B23A3A" stroke="'+INK+'" stroke-width="2.5" stroke-linejoin="round"/>';
+    case 'o':return '<ellipse cx="0" cy="11" rx="4" ry="5" fill="#B23A3A" stroke="'+INK+'" stroke-width="2.5"/>';
+    case 'grin':return '<path d="M-14 6 Q0 24 14 6Z" fill="#B23A3A" stroke="'+INK+'" stroke-width="2.5" stroke-linejoin="round"/><path d="M-8 15 Q0 19 8 15" fill="#F28A8A"/>';
+    case 'tiny':return '<path d="M-4 12 Q0 15 4 12"'+s+'/>';
+    default:return '<path d="M-8 8 Q0 16 8 8"'+s+'/>';
+  }
+}
+var ST=' stroke="'+INK+'" stroke-width="3" stroke-linejoin="round"';
+var CREATURES=[
+  {name:'モモロン',body:'#F59AB5',cheek:'#FF6F91',eyes:'dot',mouth:'cat', // うさぎ耳
+   back:'<ellipse cx="-18" cy="-62" rx="10" ry="28" fill="#F59AB5"'+ST+' transform="rotate(-14 -18 -62)"/><ellipse cx="-18" cy="-60" rx="4.5" ry="18" fill="#FFD3E0" transform="rotate(-14 -18 -60)"/>'+
+        '<ellipse cx="18" cy="-62" rx="10" ry="28" fill="#F59AB5"'+ST+' transform="rotate(14 18 -62)"/><ellipse cx="18" cy="-60" rx="4.5" ry="18" fill="#FFD3E0" transform="rotate(14 18 -60)"/>',front:''},
+  {name:'ルンルン',body:'#8FD3F4',cheek:'#5FA8E0',eyes:'spark',mouth:'open', // 小さな羽＋とさか
+   back:'<path d="M-40 -10 Q-78 -34 -74 4 Q-66 -6 -60 10 Q-52 0 -42 14Z" fill="#E8F7FF"'+ST+'/><path d="M40 -10 Q78 -34 74 4 Q66 -6 60 10 Q52 0 42 14Z" fill="#E8F7FF"'+ST+'/>',
+   front:'<path d="M-6 -44 Q0 -60 6 -44" fill="#8FD3F4"'+ST+'/>'},
+  {name:'コロリン',body:'#F4A04A',cheek:'#E4572E',eyes:'happy',mouth:'smile', // ねこ耳＋しま
+   back:'<polygon points="-40,-22 -34,-64 -8,-42" fill="#F4A04A"'+ST+'/><polygon points="-34,-32 -31,-54 -17,-42" fill="#FFD9A8"/>'+
+        '<polygon points="40,-22 34,-64 8,-42" fill="#F4A04A"'+ST+'/><polygon points="34,-32 31,-54 17,-42" fill="#FFD9A8"/>',
+   front:'<path d="M-8 -40 L-6 -28 M0 -42 L0 -28 M8 -40 L6 -28" stroke="#C9742A" stroke-width="3.5" stroke-linecap="round"/>'},
+  {name:'プニプニ',body:'#A6D86A',cheek:'#F28A8A',eyes:'dot',mouth:'o', // アンテナ＋おなか
+   back:'<path d="M0 -44 Q-6 -60 4 -74" fill="none" stroke="'+INK+'" stroke-width="3"/><circle cx="4" cy="-78" r="8" fill="#FFC53D"'+ST+'/>',
+   front:'<ellipse cx="0" cy="24" rx="24" ry="16" fill="#D3EEA8"/>'},
+  {name:'チョコロン',body:'#8B5A3C',cheek:'#C9746A',eyes:'dot',mouth:'tiny', // まる耳＋マズル
+   back:'<circle cx="-32" cy="-34" r="15" fill="#8B5A3C"'+ST+'/><circle cx="-32" cy="-34" r="7" fill="#D9A77C"/><circle cx="32" cy="-34" r="15" fill="#8B5A3C"'+ST+'/><circle cx="32" cy="-34" r="7" fill="#D9A77C"/>',
+   front:'<ellipse cx="0" cy="10" rx="18" ry="13" fill="#F1D3B0"/><ellipse cx="0" cy="4" rx="5" ry="3.5" fill="'+INK+'"/>'},
+  {name:'ミルミル',body:'#FFF4E0',cheek:'#F7A1B5',eyes:'sleepy',mouth:'smile', // つの＋もよう
+   back:'<path d="M-26 -36 Q-36 -58 -22 -64 Q-24 -48 -14 -42Z" fill="#FFC53D"'+ST+'/><path d="M26 -36 Q36 -58 22 -64 Q24 -48 14 -42Z" fill="#FFC53D"'+ST+'/>',
+   front:'<ellipse cx="-26" cy="-22" rx="11" ry="8" fill="#5B6B8C" transform="rotate(-20 -26 -22)"/><circle cx="28" cy="18" r="9" fill="#5B6B8C"/><circle cx="16" cy="32" r="5" fill="#5B6B8C"/>'},
+  {name:'ポワン',body:'#C8A8EC',cheek:'#F59AB5',eyes:'big',mouth:'smile', // くものわた
+   back:'<circle cx="-30" cy="-36" r="16" fill="#EFE4FF"'+ST+'/><circle cx="0" cy="-48" r="20" fill="#EFE4FF"'+ST+'/><circle cx="30" cy="-36" r="16" fill="#EFE4FF"'+ST+'/><circle cx="-46" cy="-12" r="10" fill="#EFE4FF"'+ST+'/><circle cx="46" cy="-12" r="10" fill="#EFE4FF"'+ST+'/>',front:''},
+  {name:'クルリン',body:'#4FC1B0',cheek:'#FFC53D',eyes:'wink',mouth:'grin', // うずまき毛＋しっぽ
+   back:'<path d="M40 18 Q70 20 66 -4 Q62 -16 54 -8 Q60 4 44 6Z" fill="#4FC1B0"'+ST+'/>',
+   front:'<path d="M0 -44 Q-2 -66 14 -66 Q26 -64 22 -54 Q18 -46 10 -50 Q6 -54 12 -58" fill="none" stroke="'+INK+'" stroke-width="3.5" stroke-linecap="round"/>'},
+  {name:'ニコニコ',body:'#FFD95A',cheek:'#F4A04A',eyes:'happy',mouth:'grin', // ふたばの芽
+   back:'<path d="M0 -44 L0 -60" stroke="'+INK+'" stroke-width="3"/><path d="M0 -58 Q-22 -78 -30 -58 Q-14 -52 0 -58Z" fill="#2E7D4F"'+ST+'/><path d="M0 -60 Q18 -84 30 -66 Q16 -56 0 -60Z" fill="#4CAF6E"'+ST+'/>',
+   front:''},
+  {name:'フワリン',body:'#FFC2A6',cheek:'#E4572E',eyes:'spark',mouth:'cat', // 大きな羽＋ふわ毛
+   back:'<path d="M-38 -16 Q-90 -50 -86 0 Q-74 -8 -72 10 Q-60 2 -56 20 Q-46 10 -40 18Z" fill="#FFF8E7"'+ST+'/><path d="M38 -16 Q90 -50 86 0 Q74 -8 72 10 Q60 2 56 20 Q46 10 40 18Z" fill="#FFF8E7"'+ST+'/>',
+   front:'<circle cx="-10" cy="-44" r="9" fill="#FFE2D3"'+ST+'/><circle cx="10" cy="-46" r="10" fill="#FFE2D3"'+ST+'/><circle cx="0" cy="-52" r="9" fill="#FFE2D3"'+ST+'/>'}
+];
+function creatureSVG(c){
+  return c.back+
+    '<circle r="46" fill="'+c.body+'"'+ST+'/>'+
+    '<ellipse cx="-14" cy="-26" rx="12" ry="7" fill="#fff" opacity=".35" transform="rotate(-25 -14 -26)"/>'+
+    c.front+
+    '<ellipse cx="-28" cy="8" rx="7" ry="4.5" fill="'+c.cheek+'" opacity=".75"/><ellipse cx="28" cy="8" rx="7" ry="4.5" fill="'+c.cheek+'" opacity=".75"/>'+
+    eyes(c.eyes)+mouth(c.mouth);
+}
+
+/* 草むらの装飾 */
+(function(){
+  var s='';for(var i=0;i<18;i++){var a=i/18*Math.PI*2,r=130,x=Math.cos(a)*r,y=Math.sin(a)*r;
+    s+='<path transform="translate('+x.toFixed(1)+' '+y.toFixed(1)+') rotate('+(a*180/Math.PI+90).toFixed(1)+')" d="M-8 6 Q-6 -8 -3 -12 Q-2 -2 0 -14 Q2 -2 3 -12 Q6 -8 8 6Z"/>';}
+  $('tufts').innerHTML=s;
+})();
+$('heroCreature').innerHTML=creatureSVG(CREATURES[0]);
+$('heroBall').innerHTML=BALL_SVG;
+$('ball').innerHTML=BALL_SVG;
+
+/* ---------- 効果音 ---------- */
+var ac=null;
+function initAudio(){
+  try{
+    if(!ac){var C=window.AudioContext||window.webkitAudioContext;if(C)ac=new C();}
+    if(ac&&ac.state==='suspended'&&ac.resume){var p=ac.resume();if(p&&p.catch)p.catch(function(){});}
+  }catch(e){ac=null;}
+}
+function tone(f,d,type,vol,when,to){
+  try{
+    if(!ac)return;var t=ac.currentTime+(when||0);
+    var o=ac.createOscillator(),g=ac.createGain();
+    o.type=type||'sine';o.frequency.setValueAtTime(f,t);
+    if(to)o.frequency.exponentialRampToValueAtTime(to,t+d);
+    g.gain.setValueAtTime(vol||.18,t);g.gain.exponentialRampToValueAtTime(.0008,t+d);
+    o.connect(g);g.connect(ac.destination);o.start(t);o.stop(t+d+.03);
+  }catch(e){}
+}
+var SFX={
+  swish:function(){try{if(!ac)return;var n=Math.floor(ac.sampleRate*.25),b=ac.createBuffer(1,n,ac.sampleRate),d=b.getChannelData(0);
+    for(var i=0;i<n;i++)d[i]=(Math.random()*2-1)*(1-i/n);
+    var s=ac.createBufferSource(),f=ac.createBiquadFilter(),g=ac.createGain(),t=ac.currentTime;
+    s.buffer=b;f.type='bandpass';f.Q.value=2;f.frequency.setValueAtTime(600,t);f.frequency.exponentialRampToValueAtTime(3500,t+.22);
+    g.gain.setValueAtTime(.35,t);s.connect(f);f.connect(g);g.connect(ac.destination);s.start(t);}catch(e){}},
+  tick:function(){tone(1400,.06,'square',.08);},
+  chime:function(){[784,988,1175,1568].forEach(function(f,i){tone(f,.35,'triangle',.16,i*.08);});},
+  boo:function(){tone(160,.35,'sawtooth',.14,0,80);},
+  fanfare:function(){[[523,0],[659,.14],[784,.28],[1047,.42],[784,.62],[1047,.76]].forEach(function(n){var d=n[1]>.7?.6:.2;tone(n[0],d,'square',.09,n[1]);tone(n[0]/2,d,'triangle',.1,n[1]);});}
+};
+
+/* ---------- 状態 ---------- */
+var DEMO=new URLSearchParams(location.search).has('demo');
+var R_START=140,R_END=10,R_DEMO=64;
+var APPEAR=400,FLY=300,SHAKE=900,GOT=700,BOUNCE=700,ESCAPE=800;
+var S={};
+function resetState(st){
+  var evs=[];window.__demoEvents=evs;
+  S={state:st,round:0,score:0,combo:0,maxCombo:0,hits:0,perfects:0,greats:0,goods:0,misses:0,rank:null,timeMs:0,events:evs};
+  window.__catchring=S;
+}
+resetState('title');
+
+var t0=0,phase='idle',phaseStart=0,shrinkStart=0,durMs=0,demoAt=0;
+var throwR=0,judge=null,pts=0,doubled=false,ticks=0,raf=0;
+
+function ev(type,at,extra){
+  var o={t:+((at-t0)/1000).toFixed(3),type:type};
+  if(extra)for(var k in extra)o[k]=extra[k];
+  S.events.push(o);
+}
+function durFor(n){return 2.2-(n-1)*(1.0/9);} // R1=2.2秒 → R10=1.2秒（線形）
+function radiusAt(at){ // 決定的な縮みの式
+  var p=(at-shrinkStart)/durMs;
+  if(p<0)p=0;if(p>1)p=1;
+  return R_START-(R_START-R_END)*p;
+}
+function judgeOf(r){
+  if(r>=58&&r<=70)return 'perfect';
+  if((r>=48&&r<58)||(r>70&&r<=82))return 'great';
+  if((r>=36&&r<48)||(r>82&&r<=96))return 'good';
+  return 'miss';
+}
+var JL={perfect:'★ パーフェクト！',great:'◎ グレート！',good:'○ グッド',miss:'× ミス…'};
+var BASE={perfect:150,great:100,good:50,miss:0};
+function rankOf(s){return s>=2200?'S':s>=1600?'A':s>=1000?'B':'C';}
+
+/* ---------- 画面 ---------- */
+function show(id){['title','play','result'].forEach(function(s){$(s).hidden=(s!==id);});}
+function setMsg(main,sub){$('msg').innerHTML='<span>'+main+(sub?'<span class="pts">'+sub+'</span>':'')+'</span>';}
+function hud(){
+  $('hRound').textContent=Math.max(1,S.round)+'/10';
+  $('hScore').textContent=S.score;
+  $('hCombo').textContent=S.combo;
+  $('comboBox').classList.toggle('hot',S.combo>=3);
+}
+function setThrowEnabled(on){
+  /* disabled属性はフォーカスを奪うため使わない。aria-disabled＋見た目で無効化し、フォーカスは維持する */
+  var off=DEMO||!on;
+  $('throwBtn').setAttribute('aria-disabled',String(off));
+  $('throwBtn').classList.toggle('is-off',off);
+}
+
+/* ---------- 進行 ---------- */
+function startGame(){
+  initAudio();
+  resetState('playing');
+  t0=performance.now();
+  ev('game_start',t0,{demo:DEMO});
+  show('play');
+  $('hint').innerHTML=DEMO?'<span class="demo-badge">デモプレイ中</span>':'フィールドのタップ・スペースキーでもなげられます';
+  startRound(1,t0);
+  cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
+  if(!DEMO)$('throwBtn').focus({preventScroll:true});
+}
+function startRound(n,at){
+  S.round=n;
+  var c=CREATURES[n-1];
+  durMs=durFor(n)*1000;
+  phase='appear';phaseStart=at;shrinkStart=at+APPEAR;
+  // デモの投げ時刻：radiusAt と同じ式で r=64 になる時刻を逆算
+  demoAt=shrinkStart+durMs*((R_START-R_DEMO)/(R_START-R_END));
+  $('creature').innerHTML=creatureSVG(c);
+  $('cname').textContent=c.name+' がきた！';
+  $('dots').innerHTML='';
+  setMsg('','');
+  hud();setThrowEnabled(false);
+  ev('round_start',at,{round:n,name:c.name,duration:+durFor(n).toFixed(4)});
+}
+function doThrow(at){
+  if(phase!=='shrink')return;
+  throwR=radiusAt(at);
+  judge=judgeOf(throwR);
+  if(judge==='perfect'||judge==='great')S.combo++;else S.combo=0;
+  S.maxCombo=Math.max(S.maxCombo,S.combo);
+  doubled=S.combo>=3;
+  pts=BASE[judge]*(doubled?2:1);
+  if(judge==='perfect')S.perfects++;else if(judge==='great')S.greats++;else if(judge==='good')S.goods++;
+  phase='fly';phaseStart=at;
+  setThrowEnabled(false);
+  SFX.swish();
+  ev('throw',at,{round:S.round,r:+throwR.toFixed(2),judge:judge});
+  setMsg(JL[judge],'');
+  hud();
+}
+function onFlyEnd(at){
+  if(judge==='miss'){
+    S.misses++;phase='bounce';phaseStart=at;
+    SFX.boo();
+    ev('miss',at,{round:S.round,r:+throwR.toFixed(2),reason:'off'});
+    setMsg(JL.miss,'ボールがはじかれた');
+  }else{
+    phase='shake';phaseStart=at;ticks=0;
+  }
+}
+function onShakeEnd(at){
+  S.hits++;S.score+=pts;
+  phase='got';phaseStart=at;
+  SFX.chime();
+  ev('catch',at,{round:S.round,judge:judge,points:pts,score:S.score,combo:S.combo});
+  setMsg(CREATURES[S.round-1].name+' つかまえた！',JL[judge].replace('！','')+'　+'+pts+(doubled?'（コンボ2ばい）':''));
+  hud();
+}
+function onTimeout(at){
+  S.combo=0;S.misses++;judge='miss';
+  phase='escape';phaseStart=at;
+  SFX.boo();
+  ev('miss',at,{round:S.round,r:R_END,reason:'timeout'});
+  setMsg('× にげられた…','なげるのがおそかった');
+  setThrowEnabled(false);hud();
+}
+function nextRound(at){if(S.round<10)startRound(S.round+1,at);else finish(at);}
+function finish(at){
+  phase='idle';
+  S.timeMs=Math.round(at-t0);
+  S.rank=rankOf(S.score);
+  S.state='result';
+  ev('result',at,{score:S.score,rank:S.rank,timeMs:S.timeMs,perfects:S.perfects,maxCombo:S.maxCombo});
+  $('rRank').textContent=S.rank;
+  $('rScore').textContent=S.score+' てん';
+  $('rP').textContent=S.perfects;$('rG').textContent=S.greats;$('rGd').textContent=S.goods;$('rM').textContent=S.misses;
+  $('rC').textContent=S.maxCombo;
+  $('rT').textContent=(S.timeMs/1000).toFixed(1)+' びょう';
+  show('result');
+  SFX.fanfare();
+  if(!DEMO)$('againBtn').focus({preventScroll:true});
+}
+
+/* ---------- 描画ループ ---------- */
+var ring=$('ring'),ringIn=$('ringIn'),ball=$('ball'),cre=$('creature'),shadow=$('shadow');
+function setRing(r,vis){
+  ring.setAttribute('r',r.toFixed(2));ringIn.setAttribute('r',Math.max(1,r-3).toFixed(2));
+  ring.style.opacity=ringIn.style.opacity=vis?1:0;
+}
+function ease(p){return 1-Math.pow(1-p,3);}
+function dotsSVG(n){
+  var s='';for(var i=0;i<3;i++)s+='<circle cx="'+(i-1)*16+'" cy="0" r="5" fill="'+(i<n?'#FFC53D':'#FFF8E7')+'" stroke="'+INK+'" stroke-width="2"/>';
+  return s;
+}
+function loop(now){
+  if(S.state!=='playing')return;
+  S.timeMs=Math.round(now-t0);
+  // 遷移は予定時刻ベース（フレーム落ちしても決定的）
+  for(var guard=0;guard<8;guard++){
+    if(phase==='appear'&&now>=shrinkStart){phase='shrink';phaseStart=shrinkStart;setThrowEnabled(true);continue;}
+    if(phase==='shrink'){
+      if(DEMO&&now>=demoAt){doThrow(demoAt);continue;}
+      if(now>=shrinkStart+durMs){onTimeout(shrinkStart+durMs);continue;}
+    }
+    if(phase==='fly'&&now>=phaseStart+FLY){onFlyEnd(phaseStart+FLY);continue;}
+    if(phase==='shake'){
+      while(ticks<3&&now>=phaseStart+150+ticks*300){ticks++;SFX.tick();$('dots').innerHTML=dotsSVG(ticks);}
+      if(now>=phaseStart+SHAKE){onShakeEnd(phaseStart+SHAKE);continue;}
+    }
+    if(phase==='got'&&now>=phaseStart+GOT){nextRound(phaseStart+GOT);if(S.state!=='playing')return;continue;}
+    if(phase==='bounce'&&now>=phaseStart+BOUNCE){nextRound(phaseStart+BOUNCE);if(S.state!=='playing')return;continue;}
+    if(phase==='escape'&&now>=phaseStart+ESCAPE){nextRound(phaseStart+ESCAPE);if(S.state!=='playing')return;continue;}
+    break;
+  }
+  render(now);
+  raf=requestAnimationFrame(loop);
+}
+function render(now){
+  var rm=reduced(),e=now-phaseStart,cS=1,cY=0,cO=1,bx=0,by=0,bs=1,br=0,bo=0;
+  if(phase==='appear'){var p=Math.min(1,e/APPEAR);cS=rm?1:.4+.6*ease(p);cO=p;setRing(R_START,true);}
+  else if(phase==='shrink'){setRing(radiusAt(now),true);}
+  else{setRing(phase==='escape'?R_END:throwR,phase==='fly');}
+
+  if(phase==='fly'){
+    var q=Math.min(1,e/FLY);bo=1;by=200-200*q-Math.sin(Math.PI*q)*70;bs=1.5-.5*q;br=rm?0:q*720; /* 720°で終わり0°とつながる */
+    if(judge!=='miss'&&q>.75)cS=1-(q-.75)*4; // ボールに吸いこまれる
+  }else if(phase==='shake'){
+    bo=1;by=24*Math.min(1,Math.max(0,e/150)); /* fly終了時by=0からの飛びを防ぐため150msかけて下げる */
+    cS=0;
+    if(!rm){var k=(e-150)/300;if(k>0&&k<3){br=Math.sin((k-Math.floor(k))*Math.PI*2)*22;}}
+  }else if(phase==='got'){bo=1;by=24;cS=0;}
+  else if(phase==='bounce'){var b=Math.min(1,e/BOUNCE);bo=1-b;bx=b*120;by=-b*30+b*b*190;br=rm?0:b*-400;}
+  else if(phase==='escape'){var z=Math.min(1,e/ESCAPE);cO=1-z;cY=rm?0:-z*40;}
+  if(!rm&&(phase==='appear'||phase==='shrink'||phase==='bounce'))cY+=Math.sin(now/260)*3;
+
+  cre.setAttribute('transform','translate(0 '+cY.toFixed(2)+') scale('+(Math.max(0,cS)*.85).toFixed(3)+')');
+  cre.style.opacity=cO;
+  shadow.style.opacity=cS>0?.35*cO:.25;
+  ball.setAttribute('transform','translate('+bx.toFixed(1)+' '+by.toFixed(1)+') rotate('+br.toFixed(1)+') scale('+bs.toFixed(3)+')');
+  ball.style.opacity=bo;
+}
+
+/* ---------- 入力 ---------- */
+function tryThrow(){
+  initAudio();
+  if(DEMO||S.state!=='playing'||phase!=='shrink')return; // デモ中は手動入力無効
+  doThrow(performance.now());
+}
+$('throwBtn').addEventListener('click',tryThrow);
+/* ボタンは click より数十ms早い pointerdown でも投げる（click との二重発火は phase ガードで防ぐ） */
+$('throwBtn').addEventListener('pointerdown',function(){tryThrow();});
+$('field').addEventListener('pointerdown',function(e){e.preventDefault();tryThrow();});
+$('field').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();tryThrow();}});
+document.addEventListener('keydown',function(e){
+  if((e.code==='Space'||e.key===' ')&&S.state==='playing'){e.preventDefault();if(!e.repeat)tryThrow();}
+});
+$('startBtn').addEventListener('click',startGame);
+$('againBtn').addEventListener('click',function(){
+  initAudio();resetState('title');show('title');$('startBtn').focus({preventScroll:true});
+});
+
+if(DEMO)startGame();else show('title');
+})();
+</script>
+</body>
+</html>

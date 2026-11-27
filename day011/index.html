@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ふわりテール 〜おちるタイミング〜</title>
+<link rel="icon" href="data:,">
+<style>
+  /* ===== トークン（6色） ===== */
+  :root{
+    --sky-top:#2B2D6E;   /* 夕焼けの上空：インディゴ */
+    --sky-low:#F4A3B5;   /* 地平の桃色 */
+    --cloud:#FFFFFF;     /* 雲 */
+    --gold:#F2C14E;      /* 的の中心 */
+    --silver:#C9D1DC;    /* 的の輪 */
+    --poko:#F27A2A;      /* ポコ */
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--sky-top);}
+  body{display:grid;place-items:center;overflow:hidden;
+    font-family:"Hiragino Maru Gothic ProN","Hiragino Sans","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+    -webkit-tap-highlight-color:transparent;}
+  .frame{position:relative;
+    width:min(100vw,480px,calc(100vh * 0.6));
+    width:min(100vw,480px,calc(100dvh * 0.6));
+    aspect-ratio:480/800;container-type:inline-size;overflow:hidden;
+    user-select:none;-webkit-user-select:none;touch-action:none;}
+  /* --u は container(.frame) の子で定義して cqw を .frame 基準にする */
+  .stage{--u:calc(100cqw / 480);position:absolute;inset:0;color:var(--cloud);}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+
+  button{font:inherit;cursor:pointer;border:0;touch-action:none;}
+  button:focus-visible{outline:max(2px,calc(var(--u)*3)) solid var(--cloud);
+    outline-offset:max(2px,calc(var(--u)*3));box-shadow:0 0 0 max(4px,calc(var(--u)*6)) var(--sky-top);}
+
+  /* HUD：ラウンドは左、スコアとミュートは右（中央のポコと重ねない） */
+  .hud{position:absolute;top:calc(var(--u)*12);left:calc(var(--u)*16);right:calc(var(--u)*12);
+    display:flex;align-items:center;gap:calc(var(--u)*14);font-size:calc(var(--u)*20);
+    text-shadow:0 calc(var(--u)*2) 0 rgba(43,45,110,.6);z-index:3;}
+  .hud p{margin:0;white-space:nowrap}
+  .hud b{font-size:calc(var(--u)*28);margin:0 calc(var(--u)*3)}
+  .hud .stat[hidden]{display:none}
+  #statScore{margin-left:auto}
+  #mute{margin-left:auto;width:max(44px,calc(var(--u)*52));height:max(44px,calc(var(--u)*52));
+    border-radius:50%;background:rgba(43,45,110,.45);color:var(--cloud);display:grid;place-items:center;flex:none}
+  #statScore:not([hidden]) + #mute{margin-left:0}
+  #mute svg{width:calc(var(--u)*28);height:calc(var(--u)*28)}
+  #mute .x{display:none}
+  #mute[aria-pressed="true"] .w{display:none}
+  #mute[aria-pressed="true"] .x{display:inline}
+
+  /* 画面（タイトル／リザルト） */
+  .screen{position:absolute;inset:0;z-index:2;text-align:center;
+    text-shadow:0 calc(var(--u)*2) 0 rgba(43,45,110,.55);}
+  .screen[hidden]{display:none}
+  h1{position:absolute;left:0;right:0;top:calc(var(--u)*104);margin:0;
+    font-size:calc(var(--u)*62);letter-spacing:.04em;line-height:1.1;font-weight:800;}
+  h1 small{display:block;margin-top:calc(var(--u)*14);font-size:calc(var(--u)*22);
+    font-weight:700;color:var(--sky-low);letter-spacing:.08em}
+  .how{position:absolute;left:calc(var(--u)*20);right:calc(var(--u)*20);top:calc(var(--u)*438);
+    margin:0;padding:calc(var(--u)*10) calc(var(--u)*14);list-style:none;font-size:calc(var(--u)*18);line-height:1.7;color:var(--cloud);
+    text-shadow:0 calc(var(--u)*2) calc(var(--u)*4) rgba(43,45,110,.9);font-weight:800;
+    background:rgba(43,45,110,.72);border-radius:calc(var(--u)*18)}
+  .big{position:absolute;left:50%;transform:translateX(-50%);
+    min-width:max(44px,calc(var(--u)*260));height:max(44px,calc(var(--u)*66));
+    border-radius:999px;background:var(--poko);color:var(--sky-top);
+    font-size:calc(var(--u)*26);font-weight:800;letter-spacing:.1em;
+    box-shadow:0 calc(var(--u)*6) 0 #B9561A;transition:transform .08s,box-shadow .08s;}
+  .big:active,.big.on{transform:translateX(-50%) translateY(calc(var(--u)*4));box-shadow:0 calc(var(--u)*2) 0 #B9561A;}
+  #start{top:calc(var(--u)*596)}
+  #again{top:calc(var(--u)*520)}
+
+  .total{position:absolute;left:0;right:0;top:calc(var(--u)*110);margin:0;font-size:calc(var(--u)*22)}
+  .total b{display:block;font-size:calc(var(--u)*96);line-height:1.05}
+  .rank{position:absolute;left:0;right:0;top:calc(var(--u)*262);margin:0;
+    font-size:calc(var(--u)*150);line-height:1;font-weight:900;color:var(--gold);
+    text-shadow:0 calc(var(--u)*5) 0 var(--sky-top);}
+  .per{position:absolute;left:50%;right:auto;transform:translateX(-50%);white-space:nowrap;top:calc(var(--u)*440);margin:0;
+    font-size:calc(var(--u)*20);color:var(--cloud);text-shadow:0 calc(var(--u)*2) calc(var(--u)*4) rgba(43,45,110,.9);font-weight:800;
+    background:rgba(43,45,110,.72);padding:calc(var(--u)*6) calc(var(--u)*14);border-radius:999px}
+  .per span{display:inline-block;margin:0 calc(var(--u)*10)}
+
+  /* フッター：ボタン下端は画面下から14u。高さは最大70uで、的(y≈685〜715)にかからない */
+  .foot{position:absolute;left:0;right:0;bottom:0;height:0;z-index:3}
+  .foot[hidden]{display:none}
+  #fuwari{bottom:calc(var(--u)*14);height:min(max(44px,calc(var(--u)*66)),calc(var(--u)*70))}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  @media (prefers-reduced-motion: reduce){ .big{transition:none} }
+</style>
+</head>
+<body>
+<main class="frame" id="frame">
+  <div class="stage" id="stage">
+    <canvas id="cv" aria-hidden="true"></canvas>
+
+    <header class="hud">
+      <p class="stat" id="statRound" hidden>ラウンド<b id="hRound">1</b>/ 3</p>
+      <p class="stat" id="statScore" hidden>スコア<b id="hScore">0</b></p>
+      <button id="mute" type="button" aria-pressed="false" aria-label="音を消す">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/>
+          <path class="w" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>
+          <path class="x" d="M17 9l5 6M22 9l-5 6"/>
+        </svg>
+      </button>
+    </header>
+
+    <section class="screen" id="title" aria-labelledby="ttl">
+      <h1 id="ttl">ふわりテール<small>〜おちるタイミング〜</small></h1>
+      <ul class="how">
+        <li>おしているあいだ：ふわりと落ちる（Spaceキー可）</li>
+        <li>はなしているあいだ：すとんと速く落ちる</li>
+        <li>動く的のまんなか（金）に着地しよう</li>
+      </ul>
+      <button class="big" id="start" type="button">スタート</button>
+    </section>
+
+    <section class="screen" id="result" hidden aria-labelledby="rTotal">
+      <p class="total" id="rTotal">合計<b id="rScore">0</b></p>
+      <p class="rank" id="rRank">S</p>
+      <p class="per" id="rPer"></p>
+      <button class="big" id="again" type="button">もう一度</button>
+    </section>
+
+    <footer class="foot" id="foot" hidden>
+      <button class="big" id="fuwari" type="button" aria-label="ふわり（押しているあいだ、ゆっくり落ちる。スペースキーでも操作できます）">ふわり</button>
+    </footer>
+
+    <p class="sr" id="live" aria-live="polite"></p>
+  </div>
+</main>
+
+<script>
+(() => {
+'use strict';
+/* ===== 定数（論理座標 480×800） ===== */
+const W = 480, H = 800;
+const PX = 240;            // ポコのx（固定。視線は真下の的へ）
+const R = 34;              // ポコの半径
+const Y0 = 108;            // 落下開始（しっぽの先端が上端で見切れない位置）
+const GROUND = 700;        // 的の高さ
+const LAND_Y = GROUND - R; // ポコの中心がここに来たら着地
+const FLOAT = 60, FAST = 260, DT = 1 / 120;
+const K_HOLD = 6, K_FREE = 2.2;   // 速度の追従率（離すと なめらかに加速）
+const READY = 0.9, LANDED = 1.5;
+const ROUNDS = [
+  { v0: 80,  spd: 90,  amp: 140 },
+  { v0: 120, spd: 130, amp: 160 },
+  { v0: 160, spd: 170, amp: 180 },
+];
+const DEMO_PHASE = [0.05, 0.62, 0.38];
+const GOLD_R = 26, SILVER_R = 60;
+
+const demo = new URLSearchParams(location.search).has('demo');
+const reduceMQ = matchMedia('(prefers-reduced-motion: reduce)');
+let reduced = reduceMQ.matches;
+if (reduceMQ.addEventListener) reduceMQ.addEventListener('change', e => { reduced = e.matches; });
+
+/* ===== 物理（ゲームとデモ計画で共通・固定ステップ） ===== */
+function step(p, hold) {
+  const target = hold ? FLOAT : FAST;
+  const k = hold ? K_HOLD : K_FREE;
+  p.v += (target - p.v) * Math.min(1, k * DT);
+  p.y += p.v * DT;
+  p.t += DT;
+  if (p.y >= LAND_Y) { p.y = LAND_Y; p.landed = true; }
+}
+// 的の中心x：速さ spd・往復幅 ±amp の三角波
+function targetX(rc, ph, t) {
+  const u = rc.spd * t / (4 * rc.amp) + ph;
+  const f = u - Math.floor(u);
+  const tri = f < 0.5 ? -1 + 4 * f : 3 - 4 * f;
+  return PX + rc.amp * tri;
+}
+function holdNow(p, Hs) { return p.t < Hs - 1e-9; }
+function simulate(rc, Hs) {
+  const p = { y: Y0, v: rc.v0, t: 0, landed: false };
+  let n = 0;
+  while (!p.landed && n++ < 30000) step(p, holdNow(p, Hs));
+  return p.t;
+}
+// デモ：的の中心がポコの真下に来る時刻 t* を求め、
+// 「落下開始からH秒ホールド→解除」の H を二分探索して着地時刻を t* に合わせる
+function planDemo(rc, ph) {
+  const T0 = simulate(rc, 0), T1 = simulate(rc, 1e4);
+  const q = 4 * rc.amp / rc.spd; // 往復周期
+  const kStart = Math.ceil((T0 / q + ph - 0.25) / 0.5);
+  for (let k = kStart; k < kStart + 12; k++) {
+    const ts = ((0.25 + 0.5 * k) - ph) * q;
+    if (ts < T0 + 0.4) continue;   // ふわりを必ず見せる
+    if (ts > T1) break;
+    let lo = 0, hi = T1;
+    for (let i = 0; i < 50; i++) {
+      const mid = (lo + hi) / 2;
+      if (simulate(rc, mid) < ts) lo = mid; else hi = mid;
+    }
+    for (const Hs of [hi, lo]) {
+      const tl = simulate(rc, Hs);
+      if (Math.abs(targetX(rc, ph, tl) - PX) <= 8) return Hs;
+    }
+  }
+  return 0;
+}
+
+/* ===== 状態 ===== */
+const events = [];
+window.__demoEvents = events;
+const pub = { state: 'title', round: 0, score: 0, rank: null, rounds: [], elapsedSec: 0, events };
+window.__fuwari = pub;
+
+let state = 'title', round = 0, score = 0, rank = null, roundsScore = [], gameTime = 0;
+let phase = 'ready', phaseT = 0, P = null, ph = 0, demoH = 0, prevHold = false, curHold = false;
+let landInfo = null, frozenTX = PX;
+let spin = 0, tailA = 0, squash = 0;
+const log = type => events.push({ t: +gameTime.toFixed(3), type });
+
+/* ===== 入力 ===== */
+let keyHeld = false;
+const pointers = new Set();
+const inputHeld = () => keyHeld || pointers.size > 0;
+
+const $ = id => document.getElementById(id);
+const fuwariBtn = $('fuwari'), stage = $('stage');
+
+function canHold() { return state === 'playing' && !demo; }
+addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.key === ' ') {
+    if (state === 'playing') {
+      e.preventDefault();
+      if (!demo) { keyHeld = true; ensureAudio(); if (phase !== 'landed') fuwariBtn.classList.add('on'); }
+    }
+  } else if ((e.key === 'm' || e.key === 'M') && !e.repeat) { toggleMute(); }
+});
+addEventListener('keyup', e => {
+  if (e.code === 'Space' || e.key === ' ') {
+    // プレイ中に押していたスペースで「もう一度」が誤って押されないようにする
+    if (state === 'playing' || keyHeld) e.preventDefault();
+    keyHeld = false;
+    if (!pointers.size) fuwariBtn.classList.remove('on');
+  }
+});
+addEventListener('blur', () => { keyHeld = false; pointers.clear(); fuwariBtn.classList.remove('on'); });
+stage.addEventListener('pointerdown', e => {
+  ensureAudio();
+  if (!canHold()) return;
+  if (e.target.closest('#mute')) return;
+  e.preventDefault();
+  pointers.add(e.pointerId);
+  try { if (e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId); } catch (_) {}
+  if (phase !== 'landed') fuwariBtn.classList.add('on');
+});
+const up = e => { pointers.delete(e.pointerId); if (!pointers.size && !keyHeld) fuwariBtn.classList.remove('on'); };
+stage.addEventListener('pointerup', up);
+stage.addEventListener('pointercancel', up);
+stage.addEventListener('contextmenu', e => e.preventDefault());
+
+$('start').addEventListener('click', () => { ensureAudio(); startGame(); });
+$('again').addEventListener('click', () => { ensureAudio(); startGame(); });
+$('mute').addEventListener('click', toggleMute);
+
+/* ===== 音（WebAudio合成のみ。ユーザー操作まで作らない） ===== */
+let ac = null, master = null, windGain = null, muted = false, windOn = false;
+function ensureAudio() {
+  if (ac) { if (ac.state === 'suspended') ac.resume().catch(() => {}); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  try { ac = new AC(); } catch (_) { ac = null; return; }
+  master = ac.createGain(); master.gain.value = muted ? 0 : 0.8; master.connect(ac.destination);
+  const len = ac.sampleRate * 2, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 850; bp.Q.value = 0.7;
+  windGain = ac.createGain(); windGain.gain.value = 0;
+  src.connect(bp); bp.connect(windGain); windGain.connect(master); src.start();
+}
+function tone(f0, at, dur, type, vol, f1) {
+  if (!ac) return;
+  const t = ac.currentTime + at, o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t);
+  if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.05);
+}
+const sThud = () => { tone(120, 0, 0.32, 'sine', 0.8, 40); tone(70, 0, 0.2, 'triangle', 0.35, 35); };
+const sChime = () => { [1319, 1568, 2093].forEach((f, i) => tone(f, 0.08 + i * 0.1, 0.5, 'triangle', 0.22)); };
+const sFanfare = () => {
+  [[523, 0, .16], [659, .16, .16], [784, .32, .16], [1047, .5, .7]].forEach(([f, a, d]) => {
+    tone(f, a, d + .1, 'square', 0.09); tone(f / 2, a, d + .1, 'triangle', 0.18);
+  });
+};
+function setWind(on) {
+  if (on === windOn) return;
+  windOn = on;
+  if (!ac || !windGain) return;
+  windGain.gain.setTargetAtTime(on ? 0.07 : 0, ac.currentTime, 0.08);
+}
+function toggleMute() {
+  muted = !muted;
+  const b = $('mute');
+  b.setAttribute('aria-pressed', String(muted));
+  b.setAttribute('aria-label', muted ? '音を出す' : '音を消す');
+  if (master) master.gain.setTargetAtTime(muted ? 0 : 0.8, ac.currentTime, 0.02);
+}
+
+/* ===== 進行 ===== */
+function show(id, on) { $(id).hidden = !on; }
+function startGame() {
+  state = 'playing'; gameTime = 0; events.length = 0;
+  round = 0; score = 0; rank = null; roundsScore = [];
+  show('title', false); show('result', false); show('foot', true);
+  show('statRound', true); show('statScore', true);
+  if (!demo) fuwariBtn.focus({ preventScroll: true });
+  log('game_start');
+  beginRound();
+}
+function beginRound() {
+  round++;
+  const rc = ROUNDS[round - 1];
+  phase = 'ready'; phaseT = 0; landInfo = null; prevHold = false; curHold = false;
+  P = { y: Y0, v: rc.v0, t: 0, landed: false };
+  ph = demo ? DEMO_PHASE[round - 1] : Math.random();
+  demoH = demo ? planDemo(rc, ph) : 0;
+  $('live').textContent = `ラウンド${round}`;
+  fuwariBtn.classList.toggle('on', inputHeld());
+  hud();
+}
+function tick() {
+  gameTime += DT; phaseT += DT;
+  const rc = ROUNDS[round - 1];
+  if (phase === 'ready') {
+    if (phaseT >= READY - 1e-9) { phase = 'fall'; phaseT = 0; }
+  } else if (phase === 'fall') {
+    const hold = demo ? holdNow(P, demoH) : inputHeld();
+    if (hold !== prevHold) { log(hold ? 'hold' : 'release'); prevHold = hold; }
+    curHold = hold;
+    step(P, hold);
+    if (P.landed) land(rc);
+  } else if (phase === 'landed') {
+    if (phaseT >= LANDED) { if (round < 3) beginRound(); else finish(); }
+  }
+}
+function land(rc) {
+  frozenTX = targetX(rc, ph, P.t);
+  const dx = Math.abs(frozenTX - PX);
+  const kind = dx <= GOLD_R ? 'gold' : dx <= SILVER_R ? 'silver' : 'miss';
+  const pts = kind === 'gold' ? 100 : kind === 'silver' ? 50 : 0;
+  score += pts; roundsScore.push(pts);
+  log('land_' + kind);
+  curHold = false; setWind(false);
+  fuwariBtn.classList.remove('on'); // 着地演出中は押下見た目を外す（次ラウンドで beginRound が inputHeld() に合わせ直す）
+  sThud(); if (kind === 'gold') sChime();
+  landInfo = { kind, pts };
+  squash = reduced ? 0 : 1;
+  phase = 'landed'; phaseT = 0;
+  $('live').textContent = kind === 'gold' ? '金、100点' : kind === 'silver' ? '銀、50点' : '地面、0点';
+  hud();
+}
+function finish() {
+  state = 'result';
+  rank = score >= 270 ? 'S' : score >= 200 ? 'A' : score >= 100 ? 'B' : 'C';
+  log('result');
+  show('foot', false); show('result', true);
+  $('rScore').textContent = score;
+  $('rRank').textContent = rank;
+  $('rPer').innerHTML = roundsScore.map((s, i) => `<span>${i + 1}回目 ${s}</span>`).join('');
+  $('live').textContent = `結果、合計${score}点、ランク${rank}`;
+  pointers.clear(); fuwariBtn.classList.remove('on');
+  setWind(false);
+  sFanfare();
+  if (!demo) $('again').focus({ preventScroll: true });
+}
+function hud() { $('hRound').textContent = Math.max(1, round); $('hScore').textContent = score; }
+
+/* ===== 雲（画面外の時間） ===== */
+const clouds = [];
+for (let i = 0; i < 7; i++) {
+  clouds.push({ x: (i * 97 + 30) % 520 - 20, y: 80 + i * 88, s: 0.6 + ((i * 37) % 10) / 14, v: 6 + (i * 5) % 9 });
+}
+
+/* ===== 描画 ===== */
+const cv = $('cv'), ctx = cv.getContext('2d');
+let scale = 1;
+function resize() {
+  const r = cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = Math.max(1, Math.round(r.width * dpr)); cv.height = Math.max(1, Math.round(r.height * dpr));
+  scale = cv.width / W;
+}
+new ResizeObserver(resize).observe(cv); resize();
+
+const CS = getComputedStyle(document.documentElement);
+const tok = n => CS.getPropertyValue(n).trim();
+const COL = { top: tok('--sky-top'), low: tok('--sky-low'), cloud: tok('--cloud'), gold: tok('--gold'), silver: tok('--silver'), poko: tok('--poko') };
+const FONT = '"Hiragino Maru Gothic ProN","Hiragino Sans","Yu Gothic UI",sans-serif';
+
+function drawSky() {
+  const g = ctx.createLinearGradient(0, 0, 0, GROUND);
+  g.addColorStop(0, COL.top); g.addColorStop(1, COL.low);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+function drawCloud(c) {
+  ctx.save(); ctx.translate(c.x, c.y); ctx.scale(c.s, c.s);
+  ctx.globalAlpha = 0.78; ctx.fillStyle = COL.cloud;
+  ctx.beginPath(); ctx.ellipse(0, 0, 46, 15, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-18, -9, 20, 15, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(12, -13, 24, 18, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+function drawGround(tx) {
+  ctx.fillStyle = COL.top;
+  ctx.beginPath(); ctx.moveTo(0, GROUND - 8);
+  ctx.quadraticCurveTo(W / 2, GROUND - 22, W, GROUND - 8);
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = COL.silver;
+  ctx.beginPath(); ctx.ellipse(tx, GROUND, SILVER_R, 15, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = COL.gold;
+  ctx.beginPath(); ctx.ellipse(tx, GROUND, GOLD_R, 7, 0, 0, Math.PI * 2); ctx.fill();
+}
+function drawShadow(y) {
+  const k = Math.min(1, Math.max(0, (y - Y0) / (LAND_Y - Y0)));
+  ctx.fillStyle = `rgba(43,45,110,${0.18 + 0.4 * k})`;
+  ctx.beginPath(); ctx.ellipse(PX, GROUND + 1, 12 + 24 * k, 4 + 3 * k, 0, 0, Math.PI * 2); ctx.fill();
+}
+// しっぽ：根元から先端へふくらむ玉の連なり（一本だけ）
+function tailPath(ax, ay, tx, ty, alpha) {
+  ctx.globalAlpha = alpha;
+  const n = 7;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const x = ax + (tx - ax) * t, y = ay + (ty - ay) * t;
+    const r = 7 + 17 * Math.sin(t * Math.PI * 0.62 + 0.15);
+    ctx.fillStyle = i >= n - 2 ? COL.cloud : COL.poko;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+// spin=0：風を受けて斜め上へなびく / spin=1：頭上を平たい円軌道で回る
+function tailTip(ax, ay, a, s, sway) {
+  const L = 74;
+  const upX = ax - 30 + Math.sin(sway) * 8, upY = ay - 56;
+  const spX = ax + Math.cos(a) * L, spY = ay - 16 + Math.sin(a) * L * 0.26;
+  return [upX + (spX - upX) * s, upY + (spY - upY) * s];
+}
+function drawPoko(y, t) {
+  const sq = squash > 0 ? Math.sin(squash * Math.PI) * 0.18 : 0;
+  const sx = 1 + sq, sy = 1 - sq;
+  const ax = PX - 4, ay = y - R * 0.82 * sy;
+  const sway = reduced ? 0 : Math.sin(t * 7) * 0.5;
+  const a = reduced ? 0 : tailA;     // reduced-motion：回転を止めて横に広げたまま
+  const tip = tailTip(ax, ay, a, spin, sway);
+  const front = spin > 0.3 && Math.sin(a) >= 0;
+  const drawTail = () => {
+    if (!reduced && spin > 0.5) {
+      for (let g = 3; g >= 1; g--) {
+        const gt = tailTip(ax, ay, a - g * 0.45, spin, sway);
+        tailPath(ax, ay, gt[0], gt[1], 0.14);
+      }
+    }
+    tailPath(ax, ay, tip[0], tip[1], 1);
+  };
+  if (!front) drawTail();
+  // 体：丸くて重そうな下ぶくれ
+  ctx.save(); ctx.translate(PX, y + R * sq); ctx.scale(sx, sy);
+  ctx.fillStyle = COL.poko;
+  ctx.beginPath(); ctx.ellipse(0, 2, R + 2, R, 0, 0, Math.PI * 2); ctx.fill();
+  const sh = ctx.createRadialGradient(-10, -14, 4, 0, 4, R + 6);
+  sh.addColorStop(0, 'rgba(255,255,255,.35)'); sh.addColorStop(0.55, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(43,45,110,.35)');
+  ctx.fillStyle = sh; ctx.beginPath(); ctx.ellipse(0, 2, R + 2, R, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = COL.poko;
+  ctx.beginPath(); ctx.ellipse(-14, R - 1, 9, 6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(14, R - 1, 9, 6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = COL.top;
+  ctx.beginPath(); ctx.ellipse(-10, -2, 3.6, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(10, -2, 3.6, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = COL.low;
+  ctx.beginPath(); ctx.ellipse(-19, 9, 6, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(19, 9, 6, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = COL.top; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+  ctx.beginPath();
+  if (spin > 0.5) ctx.arc(0, 7, 4, 0.15 * Math.PI, 0.85 * Math.PI);
+  else { ctx.moveTo(-3, 9); ctx.lineTo(3, 9); }
+  ctx.stroke();
+  ctx.restore();
+  if (front) drawTail();
+}
+function outlined(text, x, y, size, col) {
+  ctx.save();
+  ctx.font = `800 ${size}px ${FONT}`;
+  ctx.textAlign = 'center'; ctx.lineJoin = 'round';
+  ctx.lineWidth = 8; ctx.strokeStyle = COL.top; ctx.strokeText(text, x, y);
+  ctx.fillStyle = col; ctx.fillText(text, x, y);
+  ctx.restore();
+}
+function drawJudge() {
+  if (!landInfo || state !== 'playing') return;
+  const label = landInfo.kind === 'gold' ? `金 ${landInfo.pts}` : landInfo.kind === 'silver' ? `銀 ${landInfo.pts}` : `地面 ${landInfo.pts}`;
+  const col = landInfo.kind === 'gold' ? COL.gold : landInfo.kind === 'silver' ? COL.silver : COL.cloud;
+  const rise = reduced ? 0 : Math.min(1, phaseT * 3) * 24;
+  ctx.save(); ctx.globalAlpha = reduced ? 1 : Math.min(1, phaseT * 6);
+  outlined(label, PX, 560 - rise, 44, col);
+  ctx.restore();
+}
+
+/* ===== ループ ===== */
+let last = null, acc = 0, clock = 0;
+function frame(ts) {
+  let d = last == null ? 0 : (ts - last) / 1000; last = ts;
+  d = Math.min(d, 0.25); clock += d;
+  if (state === 'playing') {
+    acc += d;
+    while (acc >= DT && state === 'playing') { tick(); acc -= DT; }
+    if (state !== 'playing') acc = 0;
+  }
+
+  let wantSpin = 0;
+  if (state === 'title') wantSpin = 1;
+  else if (state === 'playing' && phase === 'fall') wantSpin = curHold ? 1 : 0;
+  if (reduced) spin = wantSpin; else spin += (wantSpin - spin) * Math.min(1, d * 10);
+  if (!reduced) tailA += d * 15 * spin;
+  setWind(state === 'playing' && phase === 'fall' && curHold);
+  if (squash > 0) squash = Math.max(0, squash - d * 3.2);
+
+  // 雲：いつもゆっくり横へ。落下中は落下に合わせて上へ流れる
+  if (!reduced) {
+    const fallV = state === 'playing' && phase === 'fall' ? P.v : 0;
+    for (const c of clouds) {
+      c.x += c.v * d; c.y -= fallV * 0.12 * c.s * d;
+      if (c.x > W + 70) c.x = -70;
+      if (c.y < -40) { c.y = GROUND - 60; c.x = Math.random() * W; }
+    }
+  }
+
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  drawSky();
+  for (const c of clouds) drawCloud(c);
+  let tx = PX, py = Y0;
+  if (state === 'title') {
+    tx = reduced ? PX : targetX(ROUNDS[0], 0.25, clock);
+    py = 340 + (reduced ? 0 : Math.sin(clock * 1.6) * 8);
+  } else {
+    const rc = ROUNDS[Math.max(0, round - 1)];
+    if (phase === 'ready') tx = targetX(rc, ph, -(READY - phaseT));
+    else if (phase === 'fall') tx = targetX(rc, ph, P.t);
+    else tx = frozenTX;
+    py = P ? P.y : Y0;
+  }
+  drawGround(tx);
+  drawShadow(state === 'title' ? Y0 : py);
+  drawPoko(py, clock);
+  drawJudge();
+  if (state === 'playing' && phase === 'ready') outlined(`ラウンド ${round}`, PX, 330, 40, COL.cloud);
+
+  // 公開状態（毎フレーム）
+  pub.state = state; pub.round = round; pub.score = score; pub.rank = rank;
+  pub.rounds = roundsScore.slice(); pub.elapsedSec = +gameTime.toFixed(3); pub.events = events;
+  requestAnimationFrame(frame);
+}
+
+if (demo) startGame(); else $('start').focus({ preventScroll: true });
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
